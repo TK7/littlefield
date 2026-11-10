@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>A Team: Littlefield Simulation 2</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="top">
+    <div>
+      <h1>Littlefield Simulation 2 <span class="team">A Team</span></h1>
+      <p id="headline" class="muted">Loading the latest snapshot…</p>
+    </div>
+    <div class="top-actions">
+      <label class="muted" for="daySelect">Snapshot</label>
+      <select id="daySelect" aria-label="Choose which stored day to view"><option value="">Latest</option></select>
+      <button id="refresh" type="button">Refresh</button>
+    </div>
+  </header>
+
+  <main id="app" hidden>
+    <p id="control" class="control"></p>
+
+    <section aria-labelledby="h-where">
+      <h2 id="h-where">Where we are</h2>
+      <div id="tiles" class="tiles"></div>
+    </section>
+
+    <section aria-labelledby="h-todo">
+      <h2 id="h-todo">What to do now</h2>
+      <p class="muted small">Copied word for word from the Playbook tab of the Google Sheet. The Sheet is the source of truth.</p>
+      <div class="table-wrap">
+        <table id="playbook" class="playbook">
+          <thead><tr><th scope="col">Check</th><th scope="col">Status / action</th><th scope="col">Why</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section aria-labelledby="h-tele" class="viz-root">
+      <h2 id="h-tele">Telemetry and stockout audit</h2>
+      <p class="muted small">One panel per measure, all on the same day axis. Shaded bands are stockouts (jobs waiting for kits). Dashed lines are purchases and contract changes, inferred from the data.</p>
+      <div id="panelToggles" class="toggles" role="group" aria-label="Panels to show"></div>
+      <div id="readout" class="readout muted small" aria-live="polite">Move over a chart to read one day across all panels.</div>
+      <div id="panels"></div>
+
+      <div class="two-col">
+        <div>
+          <h3>Stockouts</h3>
+          <div class="table-wrap"><table id="stockouts"><thead><tr><th scope="col">Start day</th><th scope="col">End day</th><th scope="col">Days</th><th scope="col">Peak jobs waiting</th></tr></thead><tbody></tbody></table></div>
+        </div>
+        <div>
+          <h3>Utilization with stockout days removed</h3>
+          <div class="table-wrap"><table id="utilAudit"><thead><tr><th scope="col">Station</th><th scope="col">All days</th><th scope="col">Without stockout days</th><th scope="col">Latest 5 days</th></tr></thead><tbody></tbody></table></div>
+          <p class="muted small" id="utilNote"></p>
+        </div>
+      </div>
+
+      <h3>Purchases and contract changes</h3>
+      <ul id="events" class="events"></ul>
+
+      <details>
+        <summary>Daily numbers as a table</summary>
+        <div class="table-wrap tall"><table id="daily"><thead></thead><tbody></tbody></table></div>
+      </details>
+    </section>
+  </main>
+
+  <section id="empty" class="empty" hidden>
+    <h2>No data yet</h2>
+    <p id="emptyMsg"></p>
+  </section>
+
+  <footer class="muted small">
+    Read-only view. Nothing here changes Littlefield. Phase 1 of 3: the what-if simulator and the advisor come next.
+  </footer>
+
+  <script src="vendor/chart.umd.js"></script>
+  <script type="module" src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,13 @@
+{
+  "name": "littlefield-sim2-dashboard",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node test/run.mjs",
+    "preview": "node test/serve.mjs",
+    "deploy": "wrangler deploy"
+  },
+  "devDependencies": {
+    "wrangler": "4.150.0"
+  }
+}

@@ -6,9 +6,9 @@
  * Version 2: after each import it also sends a snapshot to the team dashboard
  * on Cloudflare (if a dashboard connection has been set from the menu).
  *
- * This file REPLACES the whole of the earlier script. The "Drive API" service
- * added for version 1 is still needed. After pasting, reload the Sheet and use
- * Littlefield > Set dashboard connection.
+ * This file REPLACES the whole of the earlier script. The "Drive API" advanced
+ * service is optional: without it, Excel files are converted through the Drive
+ * REST API. After pasting, reload the Sheet and use Littlefield > Set dashboard connection.
  */
 
 const SOURCE_FOLDER_ID = '1I0TM0ZjEQvHM2Ntv-xkChoQQLdXk6qvm'; // "Source Data - drop Littlefield downloads here"
@@ -124,16 +124,35 @@ function dayCount_(rows) {
   return max;
 }
 
-/** Makes a temporary Google Sheets copy of an Excel file. Needs the Drive API service. */
+/**
+ * Makes a temporary Google Sheets copy of an Excel file.
+ * Uses the "Drive API" advanced service when it is turned on; otherwise calls the
+ * Drive REST API directly with this script's own sign-in, so the service is optional.
+ */
 function convertToSheet_(file) {
   const name = TMP_PREFIX + file.getName();
-  try {
-    // Drive API v3
-    return Drive.Files.copy({ name: name, mimeType: MimeType.GOOGLE_SHEETS }, file.getId()).id;
-  } catch (e) {
-    // Drive API v2
-    return Drive.Files.copy({ title: name, mimeType: MimeType.GOOGLE_SHEETS }, file.getId(), { convert: true }).id;
+  if (typeof Drive !== 'undefined') {
+    try {
+      return Drive.Files.copy({ name: name, mimeType: MimeType.GOOGLE_SHEETS }, file.getId()).id; // v3
+    } catch (e) {
+      try {
+        return Drive.Files.copy({ title: name, mimeType: MimeType.GOOGLE_SHEETS }, file.getId(), { convert: true }).id; // v2
+      } catch (e2) { /* fall through to the REST call */ }
+    }
   }
+  const res = UrlFetchApp.fetch(
+    'https://www.googleapis.com/drive/v3/files/' + encodeURIComponent(file.getId()) + '/copy?supportsAllDrives=true&fields=id', {
+      method: 'post',
+      contentType: 'application/json',
+      payload: JSON.stringify({ name: name, mimeType: MimeType.GOOGLE_SHEETS }),
+      headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken() },
+      muteHttpExceptions: true,
+    });
+  if (res.getResponseCode() !== 200) {
+    throw new Error('Could not convert "' + file.getName() + '" to a Google Sheet (Drive answered '
+      + res.getResponseCode() + '): ' + res.getContentText().slice(0, 200));
+  }
+  return JSON.parse(res.getContentText()).id;
 }
 
 function installTrigger() {

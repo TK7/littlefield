@@ -28,5 +28,5 @@
 
   // INGEST_SECRET is a secret: set it in the dashboard (Worker > Settings > Variables and Secrets)
   // or with `npx wrangler secret put INGEST_SECRET`. It is never stored in this repository.
-  "vars": {"INGEST_SECRET": ""}
+
 }

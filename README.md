@@ -18,6 +18,7 @@ advisor. Neither is in this repository yet, so no Claude API key is needed so fa
 | `wrangler.jsonc` | Worker settings: name, custom domain, KV binding, static assets |
 | `apps-script/Code.gs` | Version 2 of the Sheet script: import from Drive, then push to the dashboard |
 | `test/` | Tests, two sample snapshots, and a local preview server |
+| `sim/` | Python event simulation: the reference model for the Phase 2 what-if simulator (see `sim/README.md`) |
 
 ## Try it on your own computer first (no accounts needed)
 

@@ -3,11 +3,6 @@
 Read-only dashboard for the team's Littlefield factory. The Google Sheet stays the
 source of truth; this site shows what the Sheet says, plus the telemetry charts.
 
-**Phase 1:** data sync from the Sheet, the Playbook statuses, and the telemetry and
-stockout audit. **Phase 2:** the what-if simulator (control deck, cash to Day 268, final
-kit order calculator, utilization against lead time). **Phase 3:** the Operations Advisor
-drawer, where Claude explains the dashboard's numbers.
-
 ## What is in here
 
 | Path | Purpose |

@@ -47,9 +47,11 @@ class Config:
     # cannot tell 0.3 from 0.7 apart; 0.5 is used.
     step2_share: float = 0.5
     # Variability of process times at each station (coefficient of variation,
-    # 0 = constant, 1 = exponential). Fitted on Days 1-50 by calibrate.fit:
-    # Station 1 nearly constant, Station 2 fairly variable, Station 3 fully random.
-    cv: tuple = (0.0, 0.75, 1.0)
+    # 0 = constant, 1 = exponential). Station 1 constant, Station 3 fully random.
+    # Station 2 was 0.75 from the congested Days 1-50 alone; 0.25 fits the
+    # post-restart days (61-78) far better and Days 1-50 nearly as well. See
+    # sim/README.md "Calibration" and the GitHub issue on the remaining gap.
+    cv: tuple = (0.0, 0.25, 1.0)
     # contract number -> (revenue, quoted lead time, maximum lead time)
     contracts: dict = field(default_factory=lambda: {1: (750.0, 7.0, 14.0), 2: (1000.0, 1.0, 3.0), 3: (1250.0, 0.5, 1.0)})
 
@@ -117,9 +119,10 @@ class Policy:
     final_qty: int = None
     # Replay only: kit orders known to have been placed, day -> kits. Placed on that day
     # at the first moment kits on hand are at or below `placed_rop` (the reorder rule's
-    # trigger), or at the end of the day if that never happens. Cash is still charged.
+    # trigger: a number, or day -> estimate for that order), or at the end of the day if
+    # that never happens. Cash is still charged.
     placed_orders: dict = field(default_factory=dict)
-    placed_rop: int = 0
+    placed_rop: object = 0
 
 
 @dataclass
@@ -272,7 +275,12 @@ class _Sim:
         self._push(self.t + self.cfg.kit_lead, _KITS, kits)
 
     def _check_forced(self):
-        if self.forced and self.kits <= self.pol.placed_rop:
+        if not self.forced:
+            return
+        rop = self.pol.placed_rop
+        if isinstance(rop, dict):
+            rop = rop.get(self.forced[0], 0)
+        if self.kits <= rop:
             self._place(self.forced[1])
             self.forced = None
 

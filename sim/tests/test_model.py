@@ -129,7 +129,7 @@ class AgainstTheRealGame(unittest.TestCase):
             self.assertEqual(days, [9, 16, 25, 32, 41, 48])
 
     def test_lead_time(self):
-        self.assertLess(abs(self.s['lead_bias']), 0.15)
+        self.assertLess(abs(self.s['lead_bias']), 0.2)
         self.assertLess(self.s['lead_rmse'], 0.45)
 
     def test_queues_and_utilization(self):
@@ -194,6 +194,31 @@ class AfterTheRestart(unittest.TestCase):
         st = S.start_state(self.snap)
         self.assertEqual((st.day, st.machines, st.kits, st.contract, st.schedule), (64, (3, 4, 3), 21540, 3, PRIORITY_STEP4))
         self.assertIsNone(st.order_arrives)
+
+
+class OnTheTwelveHundredFiftyContract(unittest.TestCase):
+    """Day 78 download: 18 days on the $1,250 contract at 3/4/3. Revenue per job depends on the
+    spread of lead times, which is where the Days 1-50 calibration drifted ($1,119 against $1,162)."""
+
+    @classmethod
+    def setUpClass(cls):
+        snap = S.load(os.path.join(FIXTURES, 'day78.json'))
+        cls.real, cls.runs = C.replay(snap, S.config(snap), runs=30)
+        cls.c3 = C.contract_period(cls.real, cls.runs)
+
+    def test_revenue_per_job_within_25_dollars(self):
+        self.assertEqual(self.c3['days'][0], 61)
+        self.assertAlmostEqual(self.c3['rev_real'], 1162, delta=1)
+        self.assertLess(abs(self.c3['rev_sim'] - self.c3['rev_real']), 25)
+
+    def test_lead_time(self):
+        self.assertLess(abs(self.c3['lead_sim'] - self.c3['lead_real']), 0.03)
+
+    def test_past_reorder_points_are_estimated_per_order(self):
+        rops = C.order_rops(self.real)
+        self.assertEqual(sorted(rops), [9, 16, 25, 32, 41, 48, 52])
+        for day in (9, 16, 25, 32, 41, 48):        # the setting was 1,440 then
+            self.assertLess(abs(rops[day] - 1440), 400)
 
 
 class StartingFromASnapshot(unittest.TestCase):

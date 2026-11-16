@@ -46,6 +46,7 @@ def main(argv=None):
         real, runs = C.replay(snap, cfg, runs=a.runs or 40)
         _, s = C.compare(real, runs)
         s['mode'] = 'actual machines, contracts and kit order days' if C.changed(real) else 'Settings tab reorder rule'
+        s['contract3'] = C.contract_period(real, runs)
         s.pop('order_days_each')
         out = s
         if not a.json:
@@ -57,6 +58,10 @@ def main(argv=None):
                 print('  Station %d          queue real %5.1f model %5.1f   utilization real %3.0f%% model %3.0f%%' % (
                     k + 1, s['queue_real'][k], s['queue_sim'][k], 100 * s['util_real'][k], 100 * s['util_sim'][k]))
             print('  cash on Day %d     real %s   model %s' % (s['days'], usd(s['cash_real']), usd(s['cash_sim'])))
+            c3 = C.contract_period(real, runs)
+            if c3:
+                print('  $1,250 contract, Days %d-%d: revenue per job real %s model %s; lead time real %.3f model %.3f days' % (
+                    c3['days'][0], c3['days'][-1], usd(c3['rev_real']), usd(c3['rev_sim']), c3['lead_real'], c3['lead_sim']))
 
     elif a.command == 'fit':
         sc, best, s = C.fit(snap, runs=a.runs or 8, log=None if a.json else print)

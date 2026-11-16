@@ -442,6 +442,16 @@ function drawCurve() {
 
 const avg = (xs) => (xs.length ? xs.reduce((t, v) => t + v, 0) / xs.length : null);
 
+// ------------------------------------------------------------------ for the advisor
+// The simulator state and a way to ask the background thread for more.
+export function whatIfState() {
+  return state && state.init ? state : null;
+}
+
+export function simCall(type, payload) {
+  return call(type, payload);
+}
+
 // ------------------------------------------------------------------ wiring
 export function setupWhatIf() {
   $('wiPresets').addEventListener('click', (e) => {

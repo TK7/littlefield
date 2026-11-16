@@ -5,8 +5,8 @@ source of truth; this site shows what the Sheet says, plus the telemetry charts.
 
 **Phase 1:** data sync from the Sheet, the Playbook statuses, and the telemetry and
 stockout audit. **Phase 2:** the what-if simulator (control deck, cash to Day 268, final
-kit order calculator, utilization against lead time). Phase 3 adds the advisor, so no
-Claude API key is needed yet.
+kit order calculator, utilization against lead time). **Phase 3:** the Operations Advisor
+drawer, where Claude explains the dashboard's numbers.
 
 ## What is in here
 
@@ -19,6 +19,8 @@ Claude API key is needed yet.
 | `wrangler.jsonc` | Worker settings: name, custom domain, KV binding, static assets |
 | `apps-script/Code.gs` | Version 2 of the Sheet script: import from Drive, then push to the dashboard |
 | `public/whatif.js` | The what-if section: control deck, charts, final order table |
+| `public/advisor.js` | The advisor drawer: builds the telemetry and briefing data, streams answers |
+| `src/api/chat.js`, `src/advisor/prompt.js`, `src/access.js` | The advisor endpoint, its fixed system prompt, and the Cloudflare Access identity check |
 | `public/sim/` | JavaScript port of the event simulation (`model.js`, `snapshot.js`, `analysis.js`), run in a background thread (`worker.js`) |
 | `test/` | Tests, sample snapshots (Days 50, 59 synthetic, 64), Python reference results, and a local preview server |
 | `sim/` | Python event simulation: the reference model for the Phase 2 what-if simulator (see `sim/README.md`) |
@@ -28,7 +30,7 @@ Claude API key is needed yet.
 Requires Node 18 or later.
 
 ```
-npm test          # 17 checks: Worker routes, calculations, and the simulator against the Python model
+npm test          # 27 checks: Worker routes, calculations, the simulator against the Python model, the advisor
 npm run preview   # then open http://localhost:8788
 ```
 
@@ -71,6 +73,41 @@ To deploy by hand instead: `npm install`, `npx wrangler login`, `npm run deploy`
 - A wrong secret must fail: the Sheet shows "the dashboard answered 401".
 - If the Sheet shows "answered 302" or "403", the Bypass rule for `api/ingest` is not in effect.
 
+## The advisor (Phase 3)
+
+A button at the bottom right opens the drawer. Four one-click briefings (audit the latest
+upload, contract switch readiness, competitor cash forensics, end-game kit order) and free
+questions. The browser computes every number and sends it as telemetry (about 3-6 KB); the
+Worker adds a fixed system prompt and calls Claude, which explains the numbers and is told
+not to calculate any of its own. Answers stream into the drawer and show the snapshot day.
+
+Set up once:
+
+1. In the Anthropic Console, create an API key and set a spending limit ($50).
+2. Worker > Settings > Variables and Secrets > Add, type **Secret**, name `ANTHROPIC_API_KEY`.
+3. Optional but recommended: add two more Secrets so the Worker checks the Access token
+   itself, not just the email header: `ACCESS_TEAM_DOMAIN` (for example
+   `yourteam.cloudflareaccess.com`, from Zero Trust > Settings) and `ACCESS_AUD` (the
+   Application Audience (AUD) tag of the dashboard's Access application).
+4. Check the Access Bypass rule covers only `api/ingest`. `/api/chat` and `/api/chatlog`
+   must stay behind sign-in.
+
+| Setting | Value |
+|---|---|
+| Model | `claude-sonnet-5-5` (Sonnet, as the team decided), effort `low` |
+| Answer cap | 4,000 tokens (thinking included); the prompt asks for about 200 words |
+| Daily cap | 60 questions a day for the whole team (`CHAT_DAILY_CAP` to change) |
+| Refusals | Server-side fallback (`fallbacks: "default"`): if a safety classifier declines, the API retries on its recommended model in the same call |
+| Prompt caching | The system prompt is identical on every call and cached; the telemetry is not |
+| Cost | Roughly $0.01 a question at Sonnet 5.5 prices ($2 / $10 per million tokens) |
+
+Every question and answer is stored in KV with the time, who asked (from Cloudflare
+Access), the snapshot day and the telemetry sent. Export it from the drawer (Markdown or
+JSON) for the course's AI disclosure.
+
+Locally, `npm run preview` answers with a canned local reply, so the drawer can be tried
+without a key. With `ANTHROPIC_API_KEY` set in the shell it calls Claude and is billed.
+
 ## Keeping the simulator in step with the Python model
 
 `public/sim/model.js` is a line-by-line port of `sim/littlefield/model.py`. They share a
@@ -97,4 +134,5 @@ cd .. && npm test
 - The kit stock figures are estimates inferred from cash movements, as in the Sheet.
 - KV is eventually consistent: a push can take up to about a minute to show after Refresh.
 - AI disclosure: this code was written by Claude (Anthropic) in Cowork and Claude Code
-  sessions, directed and reviewed by the team.
+  sessions, directed and reviewed by the team. The advisor's answers are written by Claude
+  at the time of asking; the exported log records each one.

@@ -57,6 +57,19 @@ const handlers = {
     return { demand, line, curve, here };
   },
 
+  // Contract readiness at the given settings: expected revenue per job for a new order
+  // on each contract, from the simulated lead-time distribution (kits never short).
+  readiness({ settings }) {
+    const { cfg } = ctx;
+    const demand = settings.demand || ctx.demand;
+    const r = steady(cfg, settings.machines, { demand, schedule: settings.schedule, runs: 16 });
+    return {
+      machines: settings.machines, schedule: settings.schedule, demand,
+      leadMean: r.leadMean, leadP90: r.leadP90, busiest: Math.max(...r.util),
+      revenuePerJob: { 'Contract 1 ($750)': r.rev1, 'Contract 2 ($1,000)': r.rev2, 'Contract 3 ($1,250)': r.rev3 },
+    };
+  },
+
   final({ settings, runs = 30 }) {
     const { cfg, start } = ctx;
     const demand = settings.demand || ctx.demand;

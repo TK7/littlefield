@@ -135,4 +135,8 @@ await test('worker: final order table covers the window and every order goes thr
   assert.ok(f.rows[0].size > 30000 && f.rows[0].size < 45000);
 });
 
+// Phase 3: the advisor.
+const { tests: advisorTests } = await import('./advisor.mjs');
+for (const [name, fn] of advisorTests) await test(name, fn);
+
 console.log('\n' + passed + ' tests passed');

@@ -104,4 +104,35 @@ await test('derive: synthetic Day 59 detects machine purchases, a kit order, con
   assert.equal(m.days.at(-1).kitPosition, 24600);
 });
 
+// Phase 2: the simulator against the Python reference, and the worker's answers.
+const { tests: simTests } = await import('./sim.mjs');
+for (const [name, fn] of simTests) await test(name, fn);
+
+const { handlers, policyFrom } = await import('../public/sim/worker.js');
+await test('worker: current settings reproduce the Do nothing line; presets rank as expected', async () => {
+  const snap = fixture('day64.json');
+  const init = handlers.init({ snap, runs: 20 });
+  const live = { machines: init.start.machines, schedule: init.start.schedule, contract: init.start.contract, ladder: false,
+    rop: init.start.rop, qty: init.start.qty, finalDay: 0, demand: init.demand };
+  const w = handlers.whatif({ settings: live, runs: 20 });
+  assert.equal(w.line.finalP50, init.lines['Do nothing'].finalP50);
+  const rec = init.lines['Recommended (3/4/3, up to $1,250)'], safe = init.lines['Safe (3/4/3, up to $1,000)'];
+  assert.ok(rec.finalP50 > init.lines['Do nothing'].finalP50, 'the final order is worth having');
+  assert.ok(rec.finalP50 > safe.finalP50, '$1,250 beats $1,000 at 3/4/3');
+  assert.equal(rec.switchRuns[2], 0, 'already on $1,250: the ladder never steps down');
+  assert.ok(w.here.leadMean > 0.4 && w.here.leadMean < 0.6);
+  const pol = policyFrom(init.start, { ...live, ladder: true, contract: 2, finalDay: 210 });
+  assert.equal(pol.ladderTop, 2);
+  assert.equal(pol.finalDay, 210);
+});
+await test('worker: final order table covers the window and every order goes through', async () => {
+  const snap = fixture('day64.json');
+  handlers.init({ snap, runs: 2 });
+  const f = handlers.final({ settings: { machines: [3, 4, 3], schedule: 'Prioritize Step 4', contract: 3, ladder: false, rop: 6000, qty: 26700 }, runs: 6 });
+  assert.equal(f.rows[0].day, 193);
+  assert.equal(f.rows.at(-1).day, 217);
+  assert.ok(f.rows.every((r) => r.fires === 1));
+  assert.ok(f.rows[0].size > 30000 && f.rows[0].size < 45000);
+});
+
 console.log('\n' + passed + ' tests passed');

@@ -39,6 +39,47 @@
       </div>
     </section>
 
+    <section aria-labelledby="h-wi" class="whatif">
+      <h2 id="h-wi">What-if simulator</h2>
+      <p class="muted small">Test settings before using them. The simulator is the team's event model, checked against Days 1-64 of this game. Each line is the median of 200 simulated futures from the latest day. It never changes Littlefield, and the Playbook above stays the source of truth.</p>
+      <p id="wiStatus" class="muted small" aria-live="polite">Waiting for data…</p>
+      <div id="wiBody" hidden>
+        <p id="wiEnded" class="notice" hidden>Control has ended (Day 218). Settings can no longer change; the projection shows how the game runs out.</p>
+        <p id="wiCaution" class="notice warn" hidden></p>
+        <div id="wiPresets" class="presets" role="group" aria-label="Presets">
+          <button type="button" data-preset="reset">Reset to current</button>
+          <button type="button" data-preset="nothing">Do nothing</button>
+          <button type="button" data-preset="safe">Safe (3/4/3, up to $1,000)</button>
+          <button type="button" data-preset="rec">Recommended (3/4/3, up to $1,250)</button>
+        </div>
+        <p id="wiBanner" class="banner" role="status" hidden></p>
+        <p id="wiBlocked" class="notice bad" role="alert" hidden></p>
+        <div id="wiDeck" class="deck"></div>
+
+        <h3>Cash to Day 268</h3>
+        <div class="panel-head"><div class="legend" id="wiCashLegend"></div></div>
+        <div class="chart-tall"><canvas id="wiCash" role="img" aria-label="Actual cash so far and projected cash to Day 268 for the what-if settings and the three presets. The same numbers are in the table below."></canvas></div>
+        <div class="table-wrap">
+          <table id="wiCashTable"><thead><tr><th scope="col">Line</th><th scope="col" class="num">Day 268 cash (median)</th><th scope="col" class="num">10% to 90% of runs</th><th scope="col" class="num">Against Recommended</th><th scope="col" class="num">Revenue per job</th><th scope="col" class="num">Contract switches</th><th scope="col" class="num">Kits left</th></tr></thead><tbody></tbody></table>
+        </div>
+        <p class="muted small">Shaded bands: 10th to 90th percentile of runs, from demand noise alone. All lines use the same random demand, so the gaps between them come from the settings. Kits left over on Day 268 are worthless.</p>
+
+        <h3>Final kit order</h3>
+        <p id="wiFinalStatus" class="small"></p>
+        <div class="table-wrap">
+          <table id="wiFinalTable"><thead><tr><th scope="col">Day placed</th><th scope="col" class="num">Goes through</th><th scope="col" class="num">Kits</th><th scope="col" class="num">Cost</th><th scope="col" class="num">Kits left Day 268</th><th scope="col" class="num">Day 268 cash (median)</th><th scope="col" class="num">Bad case (10% of runs)</th></tr></thead><tbody></tbody></table>
+        </div>
+        <p id="wiFinalAdvice" class="small"></p>
+        <p class="muted small">For the what-if settings. Size = kits for the jobs that can still be finished by Day 268, less kits on hand and on order. An order only goes through when kits on hand are at or below the reorder point, no order is on the way, cash covers it and the quantity is above zero. Green rows are within $5,000 of the best day in the median and $10,000 in the bad case; smaller gaps are simulation noise. Amber rows risk the order firing late: if an order is still on the way, the final order only fires when it arrives, and after Day 218 nobody can set the quantity back to 0, so Littlefield keeps reordering.</p>
+        <ol id="wiFinalSteps" class="steps small"></ol>
+
+        <h3>Utilization against lead time</h3>
+        <div class="chart-tall"><canvas id="wiCurve" role="img" aria-label="Simulated lead time against the busiest station's utilization for the what-if machine mix, with the textbook M/M/c line and the contract revenue zones."></canvas></div>
+        <p id="wiCurveReadout" class="small" aria-live="polite"></p>
+        <p class="muted small">Curves: the what-if machine mix with demand from 8 to 20 jobs a day. The M/M/c line assumes fully random process times at every station; ours are constant at Station 1, so it overstates lead time.</p>
+      </div>
+    </section>
+
     <section aria-labelledby="h-tele" class="viz-root">
       <h2 id="h-tele">Telemetry and stockout audit</h2>
       <p class="muted small">One panel per measure, all on the same day axis. Shaded bands are stockouts (jobs waiting for kits). Dashed lines are purchases and contract changes, inferred from the data.</p>
@@ -74,7 +115,7 @@
   </section>
 
   <footer class="muted small">
-    Read-only view. Nothing here changes Littlefield. Phase 1 of 3: the what-if simulator and the advisor come next.
+    Read-only view. Nothing here changes Littlefield. Phase 2 of 3: the advisor comes next.
   </footer>
 
   <script src="vendor/chart.umd.js"></script>

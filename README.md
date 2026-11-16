@@ -3,9 +3,10 @@
 Read-only dashboard for the team's Littlefield factory. The Google Sheet stays the
 source of truth; this site shows what the Sheet says, plus the telemetry charts.
 
-**Phase 1 (this code):** data sync from the Sheet, the Playbook statuses, and the
-telemetry and stockout audit. Phase 2 adds the what-if simulator; Phase 3 adds the
-advisor. Neither is in this repository yet, so no Claude API key is needed so far.
+**Phase 1:** data sync from the Sheet, the Playbook statuses, and the telemetry and
+stockout audit. **Phase 2:** the what-if simulator (control deck, cash to Day 268, final
+kit order calculator, utilization against lead time). Phase 3 adds the advisor, so no
+Claude API key is needed yet.
 
 ## What is in here
 
@@ -17,7 +18,9 @@ advisor. Neither is in this repository yet, so no Claude API key is needed so fa
 | `src/api/snapshot.js` | Returns the latest snapshot, a stored day, or the list of stored days |
 | `wrangler.jsonc` | Worker settings: name, custom domain, KV binding, static assets |
 | `apps-script/Code.gs` | Version 2 of the Sheet script: import from Drive, then push to the dashboard |
-| `test/` | Tests, two sample snapshots, and a local preview server |
+| `public/whatif.js` | The what-if section: control deck, charts, final order table |
+| `public/sim/` | JavaScript port of the event simulation (`model.js`, `snapshot.js`, `analysis.js`), run in a background thread (`worker.js`) |
+| `test/` | Tests, sample snapshots (Days 50, 59 synthetic, 64), Python reference results, and a local preview server |
 | `sim/` | Python event simulation: the reference model for the Phase 2 what-if simulator (see `sim/README.md`) |
 
 ## Try it on your own computer first (no accounts needed)
@@ -25,7 +28,7 @@ advisor. Neither is in this repository yet, so no Claude API key is needed so fa
 Requires Node 18 or later.
 
 ```
-npm test          # 9 checks on the Worker routes, the two handlers and the calculations
+npm test          # 17 checks: Worker routes, calculations, and the simulator against the Python model
 npm run preview   # then open http://localhost:8788
 ```
 
@@ -67,6 +70,18 @@ To deploy by hand instead: `npm install`, `npx wrangler login`, `npm run deploy`
 - `https://littlefield.jay.systems/api/snapshot` in a private window must also ask for sign-in.
 - A wrong secret must fail: the Sheet shows "the dashboard answered 401".
 - If the Sheet shows "answered 302" or "403", the Bypass rule for `api/ingest` is not in effect.
+
+## Keeping the simulator in step with the Python model
+
+`public/sim/model.js` is a line-by-line port of `sim/littlefield/model.py`. They share a
+random number generator, so the same seed gives the same run. After changing either model:
+
+```
+cd sim && python3 -m unittest discover -s tests && python3 -m littlefield.golden
+cd .. && npm test
+```
+
+`npm test` fails if any simulated day differs from the Python results.
 
 ## How updates flow
 

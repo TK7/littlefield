@@ -288,9 +288,10 @@ class _Sim:
         self.in_transit = True
         self.orders.append((self.t, self.qty))
         self._push(self.t + self.cfg.kit_lead, _KITS, self.qty)
-        if self.final_pending:  # the final order went through: stop ordering
-            self.final_pending = False
-            self.qty = 0
+        if self.final_pending:  # the final order went through: the team sets the quantity to 0,
+            self.final_pending = False  # but only while it still has control
+            if self.t < self.cfg.control_end:
+                self.qty = 0
 
     def _start_job(self, job):
         self.kits -= self.cfg.kits_per_job
@@ -424,13 +425,16 @@ class _Sim:
         return min(due) if due else self.t + self.cfg.kit_lead
 
     def _ladder(self):
-        """Move to the contract with the best expected revenue for a new order.
+        """Step up to the contract with the best expected revenue for a new order.
 
         The lead-time estimate is stretched by the margin, so the rule waits until
         the switch is safe rather than merely possible.
         """
+        if self.contract > self.pol.ladder_top:  # the ladder's ceiling is a cap
+            self.contract = self.pol.ladder_top
         lead = self.lead_estimate() * (1 + self.pol.ladder_margin)
-        best = max(range(1, self.pol.ladder_top + 1), key=lambda c: (revenue_for(self.cfg.contracts[c], lead), -c))
+        # Only ever step up: a team on the $1,250 contract does not drop back for one busy day.
+        best = max(range(self.contract, self.pol.ladder_top + 1), key=lambda c: (revenue_for(self.cfg.contracts[c], lead), -c), default=self.contract)
         self.contract = best
 
     def final_order_size(self, day):

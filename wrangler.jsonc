@@ -26,6 +26,30 @@
 
   "observability": { "enabled": true },
 
+ // "vars": {
+ //   "ENVIRONMENT": "production"
+ // },
+ // "r2_buckets": [
+ //   {
+ //     "binding": "UPLOADS",
+ //     "bucket_name": "prod-uploads"
+ //   }
+ // ],
+  // ...
+  "previews": {
+    // ...
+   // "vars": {
+   //   "ENVIRONMENT": "preview"
+   // },
+   // "r2_buckets": [
+   //   {
+   //     "binding": "UPLOADS",
+   //     "bucket_name": "r2-staging"
+   //   }
+   // ]
+    // ...
+  }
+
   // INGEST_SECRET is a secret: set it in the dashboard (Worker > Settings > Variables and Secrets)
   // or with `npx wrangler secret put INGEST_SECRET`. It is never stored in this repository.
 

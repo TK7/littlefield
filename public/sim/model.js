@@ -36,7 +36,7 @@ export function defaultConfig() {
     prices: [90000, 80000, 100000],
     ptimes: [0.1171, 0.1749, 0.1226],   // measured on Days 1-50
     step2Share: 0.5,
-    cv: [0.0, 0.75, 1.0],                // fitted on Days 1-50
+    cv: [0.0, 0.25, 1.0],                // fitted on Days 1-50 and 61-78 (see sim/README.md)
     contracts: { 1: [750, 7, 14], 2: [1000, 1, 3], 3: [1250, 0.5, 1] },
   };
 }
@@ -83,7 +83,7 @@ export function policy(p = {}) {
     machines: {}, contract: {}, rop: {}, qty: {}, schedule: {},
     ladder: false, ladderTop: 3, ladderMargin: 0.25,
     finalDay: null, finalQty: null,
-    placedOrders: {}, placedRop: 0,
+    placedOrders: {}, placedRop: 0,   // replay only; placedRop: number or {day: estimate}
     ...p,
   };
 }
@@ -233,7 +233,9 @@ class Sim {
   }
 
   checkForced() {
-    if (this.forced && this.kits <= this.pol.placedRop) { this.place(this.forced[1]); this.forced = null; }
+    if (!this.forced) return;
+    const rop = typeof this.pol.placedRop === 'object' ? (this.pol.placedRop[this.forced[0]] || 0) : this.pol.placedRop;
+    if (this.kits <= rop) { this.place(this.forced[1]); this.forced = null; }
   }
 
   checkOrder() {

@@ -17,14 +17,36 @@ from .rng import Rng
 from . import snapshot as S
 
 
-def history_policy(real, rop=0):
+def order_rops(real, kit_lead=4.0, start_kits=9600):
+    """Estimate the reorder point in force when each past kit order fired.
+
+    The download does not record settings. An order fired during day d, so the reorder
+    point was below the kits on hand at the end of day d-1 and at or above the lowest
+    level reached during day d (about the end-of-day level). The midpoint is used.
+    """
+    def on_hand(i):
+        d = real[i]
+        on_order = sum(x['kits_ordered'] for x in real[:i + 1] if x['kits_ordered'] and x['day'] > d['day'] - kit_lead)
+        return d['kit_position'] - on_order
+    out = {}
+    for i, d in enumerate(real):
+        if not d['kits_ordered']:
+            continue
+        before = on_hand(i - 1) if i > 0 else start_kits
+        after = max(0, on_hand(i))
+        out[d['day']] = max(0, int(round((max(before, after) + after) / 2)))
+    return out
+
+
+def history_policy(real, rop=None):
     """What the team actually did, read from the data: machine counts, contract, kit orders.
 
     Used to replay periods with changes (for example after the Day 50 restart). Kit orders
     are placed on the days they were detected, not by the reorder rule, so the replay tests
     the factory model rather than the inferred settings.
     """
-    pol = Policy(placed_orders={d['day']: int(d['kits_ordered']) for d in real if d['kits_ordered']}, placed_rop=rop)
+    pol = Policy(placed_orders={d['day']: int(d['kits_ordered']) for d in real if d['kits_ordered']},
+                 placed_rop=order_rops(real) if rop is None else rop)
     prev_m, prev_c = None, None
     for d in real:
         m = tuple(max(1, math.ceil(round(x, 3))) for x in d['machines'])
@@ -54,7 +76,7 @@ def replay(snap, cfg, runs=20, seed=1, start=None, policy=None, history=None):
         if history is None:
             history = changed(real)
         if history:
-            policy = history_policy(real, rop=int(snap.get('settings', {}).get('rop') or 0))
+            policy = history_policy(real)
             # Machines bought for day 1 count as the starting mix; no reorder rule.
             m1 = policy.machines.pop(real[0]['day'], None)
             start = start or StartState(machines=m1 or (2, 3, 2), rop=0, qty=0)
@@ -99,6 +121,28 @@ def compare(real, runs):
         'days': n,
     }
     return rows, summary
+
+
+def contract_period(real, runs, contract=3):
+    """Real against simulated revenue per job and lead time on the days a contract took orders.
+
+    The comparison that matters for the rest of the game: revenue per job depends on the
+    whole lead-time distribution, not just its average.
+    """
+    idx = [i for i, d in enumerate(real) if d['contract'] == contract and d['completed']]
+    if not idx:
+        return None
+    done_real = sum(real[i]['completed'] for i in idx)
+    done_sim = sum(r['days'][i]['completed'] for r in runs for i in idx)
+    full = sum(1 for r in runs for i in idx for x in r['days'][i]['leads'] if x <= 0.5)
+    return {
+        'days': [real[i]['day'] for i in idx],
+        'rev_real': sum(real[i]['revenue'] for i in idx) / done_real,
+        'rev_sim': sum(r['days'][i]['revenue'] for r in runs for i in idx) / done_sim,
+        'lead_real': sum(real[i]['lead'] * real[i]['completed'] for i in idx) / done_real,
+        'lead_sim': sum(x for r in runs for i in idx for x in r['days'][i]['leads']) / done_sim,
+        'share_within_half_day_sim': full / done_sim,
+    }
 
 
 def score(summary):

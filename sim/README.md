@@ -6,7 +6,7 @@ no installs.
 
 ```
 cd sim
-python3 -m unittest discover -s tests       # 24 checks, about 3 seconds
+python3 -m unittest discover -s tests       # 32 checks, about 4 seconds
 python3 -m littlefield validate             # replay Days 1-50 against the real game
 python3 -m littlefield mixes                # machine-mix table
 python3 -m littlefield project              # cash to Day 268 for the three presets
@@ -34,52 +34,69 @@ machine-readable output, `--runs N` for more or fewer runs.
 | Final kit order | Size = kits for the jobs that can still finish by Day 268, less kits on hand and on order; placed by raising the reorder point, then the quantity goes to 0 |
 | Contract ladder | Each day, move to the contract with the best expected revenue for a new order, using the work queued ahead and a 25% safety margin on lead time |
 
-## Calibration (Days 1-50)
+## Calibration
 
-The real daily order counts are replayed through the model with the team's actual
-settings. With the fitted values below the model reproduces, averaged over 40 runs:
+Two periods are replayed with the real daily order counts and the team's actual settings:
+the congested Days 1-50 (2/3/2, stockouts, $750 contract) and the post-restart Days
+61-78 (3/4/3, $1,250 contract, no stockouts). Averaged over 40 runs:
 
-| | Real game | Model |
+| Days 1-50 | Real game | Model |
 |---|---|---|
 | Kit order days | 9, 16, 25, 32, 41, 48 | 9, 16, 25, 32, 41, 48 (every run) |
 | Stockouts start | Days 11, 18, 27, 34, 43, 50 | same waves, within a day |
-| Average lead time | 2.87 days | 2.84 days |
-| Queues, jobs (St1 / St2 / St3) | 20.1 / 3.6 / 8.3 | 20.2 / 3.6 / 7.9 |
+| Average lead time | 2.87 days | 2.76 days |
+| Queues, jobs (St1 / St2 / St3) | 20.1 / 3.6 / 8.3 | 20.2 / 2.3 / 7.9 |
 | Utilization | 85% / 83% / 87% | 86% / 84% / 88% |
-| Cash on Day 50 | $1,106,279 | $1,110,463 |
+| Cash on Day 50 | $1,106,279 | $1,111,657 |
 
-After the restart (`test/fixtures/day64.json`), the replay follows what the team did:
-3/4/3 from Day 51, $1,000 contract from Day 56, $1,250 from Day 61, the 26,700-kit
-order on Day 52. With no refitting:
-
-| | Real game | Model |
+| Days 61-78, $1,250 contract (`test/fixtures/day78.json`) | Real game | Model |
 |---|---|---|
-| Revenue per job, Days 61-64 ($1,250 contract) | $1,163 | about $1,140 |
-| Lead time, Days 61-64 | 0.41-0.50 days | 0.42-0.47 days |
-| Cash on Day 64 | $792,147 | $792,886 |
+| Revenue per job | $1,162 | $1,156 |
+| Average lead time | 0.454 days | 0.455 days |
+| Days earning the full $1,250 | 2 of 18 (Days 69, 76) | about 1 of 18 |
+| Cash on Day 78 | $1,022,984 | $1,025,142 |
 
-The model drains the Day 50 backlog about half a day faster than the real factory did
-(Days 50-58): it underestimates how long Station 1's queue was when it was overloaded.
-That does not affect the decisions left, with the factory now below 70% utilization.
+Fitted values:
 
-Fitted values (`python3 -m littlefield fit` repeats the search):
-
-- **Process times** 0.1171 / 0.1749 / 0.1226 machine-days per job, measured from
-  utilization. Station 3 is faster than the Settings tab's planning value of 0.128.
-- **Variability** (0 = constant, 1 = exponential): Station 1 0.0, Station 2 0.75,
-  Station 3 1.0. Station 2 and 3 are **not** nearly constant, which the plan assumed.
+- **Process times** about 0.117 / 0.175 / 0.121 machine-days per job, measured from
+  utilization in each snapshot. Station 3 is faster than the Settings tab's 0.128.
+- **Variability** (0 = constant, 1 = exponential): Station 1 0.0, Station 2 0.25,
+  Station 3 1.0.
 - **Step 2 share of Station 2 time**: 0.5. The data cannot tell 0.3 from 0.7.
+
+### The Station 2 correction (Day 78)
+
+Fitted on Days 1-50 alone, Station 2's variability came out at 0.75. Against the
+post-restart days that setting gets the average lead time right (0.459 against 0.454
+days) but revenue per job wrong: $1,119 against the real $1,162. Revenue depends on how
+many jobs finish inside half a day, and 0.75 gave Station 2 too long a tail. No single
+setting fits both periods exactly:
+
+| Station 2 variability | Days 1-50: Station 2 queue (real 3.6) | Days 61-78: revenue per job (real $1,162) |
+|---|---|---|
+| 0.75 (before) | 3.8 | $1,119 |
+| 0.5 | 2.8 | $1,140 |
+| 0.25 (now) | 2.3 | $1,148 to $1,156 |
+
+The rest of the game runs uncongested, so 0.25 is used. That two periods need different
+values points to something the model does not represent yet; real days with an average
+lead time below the sum of the process times (Day 76: 0.336 days against 0.413) suggest
+Littlefield splits jobs into lots that move through stations in parallel. Tracked as a
+GitHub issue.
+
+Replaying a later snapshot now estimates the reorder point that was in force for each
+past kit order from the stock levels on that day (`calibrate.order_rops`). Before, it used
+the current setting for every past order, which moved Days 1-50 orders too early.
 
 ## What the calibrated model says that differs from the Sheet
 
-- At 3/4/3 the lead time is about the same as the Sheet's table (0.51 against 0.47 days),
-  but revenue per job on the $1,250 contract is about **$1,050-1,070, not $1,199**,
-  because variable process times push more jobs past the half-day promise. The $1,250
-  contract still beats $1,000 at 3/4/3, by about $50 a job instead of $200.
-- A fourth machine at Station 3 (3/4/4) or a fifth at Station 2 (3/5/3) adds about
-  $50-60 a job on the $1,250 contract. Whether it pays for itself depends on the days left.
-- With fully constant process times the model gives the Sheet's numbers back
-  ($1,222 a job at 3/4/3), so the difference comes from the variability alone.
+- At 3/4/3 the lead time is about the same as the Sheet's table (0.47 against 0.47 days),
+  but revenue per job on the $1,250 contract is about **$1,140-1,160, not $1,199**,
+  because variable process times push some jobs past the half-day promise. Averaged over
+  many days, no setting earns the full $1,250 a job, in the model or in the real game.
+- At about 14 jobs a day, a fourth machine at Station 3 (3/4/4) or a fifth at Station 2
+  (3/5/3) adds about $20-30 a job on the $1,250 contract: not enough to repay the machine
+  over the days left.
 
 ## Limits
 

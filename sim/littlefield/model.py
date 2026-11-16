@@ -43,14 +43,15 @@ class Config:
     # Measured from Days 1-50 utilization (snapshot.measured_ptimes); the Settings tab's
     # planning values are 0.117 / 0.175 / 0.128.
     ptimes: tuple = (0.1171, 0.1749, 0.1226)
-    # Share of Station 2's time spent on step 2 (the rest is step 4). The Day 1-50 data
-    # cannot tell 0.3 from 0.7 apart; 0.5 is used.
-    step2_share: float = 0.5
+    # Share of Station 2's time spent on step 2 (the rest is step 4). 0.3 matches Station
+    # 2's queue on Days 1-50 (3.0 jobs against 3.6; 0.5 gave 2.3) and leaves Days 61-78
+    # unchanged. Each job is one lot of 60 kits, so the per-lot setup is inside these times.
+    step2_share: float = 0.3
     # Variability of process times at each station (coefficient of variation,
     # 0 = constant, 1 = exponential). Station 1 constant, Station 3 fully random.
     # Station 2 was 0.75 from the congested Days 1-50 alone; 0.25 fits the
     # post-restart days (61-78) far better and Days 1-50 nearly as well. See
-    # sim/README.md "Calibration" and the GitHub issue on the remaining gap.
+    # sim/README.md "Calibration".
     cv: tuple = (0.0, 0.25, 1.0)
     # contract number -> (revenue, quoted lead time, maximum lead time)
     contracts: dict = field(default_factory=lambda: {1: (750.0, 7.0, 14.0), 2: (1000.0, 1.0, 3.0), 3: (1250.0, 0.5, 1.0)})

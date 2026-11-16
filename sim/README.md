@@ -44,17 +44,17 @@ the congested Days 1-50 (2/3/2, stockouts, $750 contract) and the post-restart D
 |---|---|---|
 | Kit order days | 9, 16, 25, 32, 41, 48 | 9, 16, 25, 32, 41, 48 (every run) |
 | Stockouts start | Days 11, 18, 27, 34, 43, 50 | same waves, within a day |
-| Average lead time | 2.87 days | 2.76 days |
-| Queues, jobs (St1 / St2 / St3) | 20.1 / 3.6 / 8.3 | 20.2 / 2.3 / 7.9 |
+| Average lead time | 2.87 days | 2.84 days |
+| Queues, jobs (St1 / St2 / St3) | 20.1 / 3.6 / 8.3 | 20.2 / 2.8 / 8.7 |
 | Utilization | 85% / 83% / 87% | 86% / 84% / 88% |
-| Cash on Day 50 | $1,106,279 | $1,111,657 |
+| Cash on Day 50 | $1,106,279 | $1,110,370 |
 
 | Days 61-78, $1,250 contract (`test/fixtures/day78.json`) | Real game | Model |
 |---|---|---|
-| Revenue per job | $1,162 | $1,156 |
-| Average lead time | 0.454 days | 0.455 days |
+| Revenue per job | $1,162 | $1,151 (10th to 90th percentile over 18 days: $1,115 to $1,176) |
+| Average lead time | 0.454 days | 0.458 days |
 | Days earning the full $1,250 | 2 of 18 (Days 69, 76) | about 1 of 18 |
-| Cash on Day 78 | $1,022,984 | $1,025,142 |
+| Cash on Day 78 | $1,022,984 | $1,023,951 |
 
 Fitted values:
 
@@ -62,7 +62,12 @@ Fitted values:
   utilization in each snapshot. Station 3 is faster than the Settings tab's 0.128.
 - **Variability** (0 = constant, 1 = exponential): Station 1 0.0, Station 2 0.25,
   Station 3 1.0.
-- **Step 2 share of Station 2 time**: 0.5. The data cannot tell 0.3 from 0.7.
+- **Step 2 share of Station 2 time**: 0.3 (step 4 takes the larger part). It matches
+  Station 2's queue on Days 1-50 better than 0.5 (2.8 against 2.3 jobs; real 3.6) and
+  leaves Days 61-78 unchanged.
+- **Lots**: each job enters the factory as one lot of 60 kits and is processed whole at
+  each step, as the game's help page says and as the model does. The setup time is
+  incurred once per lot, so it is already inside the measured process times.
 
 ### The Station 2 correction (Day 78)
 
@@ -78,11 +83,13 @@ setting fits both periods exactly:
 | 0.5 | 2.8 | $1,140 |
 | 0.25 (now) | 2.3 | $1,148 to $1,156 |
 
-The rest of the game runs uncongested, so 0.25 is used. That two periods need different
-values points to something the model does not represent yet; real days with an average
-lead time below the sum of the process times (Day 76: 0.336 days against 0.413) suggest
-Littlefield splits jobs into lots that move through stations in parallel. Tracked as a
-GitHub issue.
+The rest of the game runs uncongested, so 0.25 is used, together with a 0.3 step 2 share.
+Lot splitting was ruled out (one lot of 60 kits per job). Real days with an average lead
+time below the sum of the process times (Day 76: 0.336 days) are within the model's
+day-to-day range: with Station 3 fully random, many jobs finish faster than average, and
+the quickest of 18 days in the model averages about 0.357 days. Over 18 days, revenue per
+job varies by about $34 from luck alone, and the real $1,162 sits at the model's 58th
+percentile, so no drift is measurable now.
 
 Replaying a later snapshot now estimates the reorder point that was in force for each
 past kit order from the stock levels on that day (`calibrate.order_rops`). Before, it used

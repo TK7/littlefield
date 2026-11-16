@@ -50,7 +50,10 @@
     // ...
   }
 
-  // INGEST_SECRET is a secret: set it in the dashboard (Worker > Settings > Variables and Secrets)
-  // or with `npx wrangler secret put INGEST_SECRET`. It is never stored in this repository.
+  // Secrets (Worker > Settings > Variables and Secrets, type Secret; never in this repository):
+  //   INGEST_SECRET       shared with the Google Sheet's script
+  //   ANTHROPIC_API_KEY   the advisor's Claude API key (Phase 3)
+  //   ACCESS_TEAM_DOMAIN, ACCESS_AUD  optional: verify Cloudflare Access tokens on the advisor
+  // Add these as Secrets, not Text: a deploy removes Text variables that are not in this file.
 
 }

@@ -114,8 +114,32 @@
     <p id="emptyMsg"></p>
   </section>
 
+  <button id="advOpen" class="adv-open" type="button" aria-controls="advisor" aria-expanded="false">Ask the advisor</button>
+  <aside id="advisor" class="advisor" aria-labelledby="h-adv" hidden>
+    <div class="adv-head">
+      <h2 id="h-adv">Operations advisor</h2>
+      <button id="advClose" type="button" aria-label="Close the advisor">Close</button>
+    </div>
+    <p class="muted small">Claude explains the numbers this dashboard has computed. It does not calculate figures of its own, and the Playbook decides. <span id="advDay"></span></p>
+    <div class="adv-briefings" role="group" aria-label="One-click briefings">
+      <button type="button" data-briefing="audit">Audit latest upload</button>
+      <button type="button" data-briefing="contract">Contract switch readiness</button>
+      <button type="button" data-briefing="competitors">Competitor cash forensics</button>
+      <button type="button" data-briefing="endgame">End-game kit order</button>
+    </div>
+    <div id="advLog" class="adv-log" aria-live="polite"></div>
+    <p id="advStatus" class="muted small" aria-live="polite"></p>
+    <form id="advForm" class="adv-form">
+      <label for="advQuestion" class="sr-only">Your question</label>
+      <textarea id="advQuestion" rows="2" maxlength="2000" placeholder="Ask about the numbers on this dashboard"></textarea>
+      <button id="advAsk" type="submit">Ask</button>
+    </form>
+    <p class="muted small adv-foot"><span id="advRemaining"></span> Every question and answer is logged for the course's AI disclosure:
+      <a href="/api/chatlog?format=md" download>export as Markdown</a> · <a href="/api/chatlog?format=json" download>JSON</a>.</p>
+  </aside>
+
   <footer class="muted small">
-    Read-only view. Nothing here changes Littlefield. Phase 2 of 3: the advisor comes next.
+    Read-only view. Nothing here changes Littlefield. The advisor's answers are written by Claude (Anthropic) from this dashboard's numbers.
   </footer>
 
   <script src="vendor/chart.umd.js"></script>

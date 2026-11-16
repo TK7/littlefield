@@ -1,4 +1,5 @@
 import { derive, rollingMean } from './derive.js';
+import { initWhatIf, setupWhatIf, redrawWhatIf } from './whatif.js';
 
 const $ = (id) => document.getElementById(id);
 const css = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
@@ -115,6 +116,7 @@ function render(snap) {
   renderToggles();
   renderPanels();
   renderAudit();
+  initWhatIf(snap, model);
 }
 
 // Same rule as the Sheet's colour coding: the first word of the status decides.
@@ -318,6 +320,7 @@ function row(values, numeric = false, firstText = 0) {
 // ---------------------------------------------------------------- start
 $('refresh').addEventListener('click', () => { load($('daySelect').value); loadDayList(); });
 $('daySelect').addEventListener('change', () => load($('daySelect').value));
-window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { if (model) renderPanels(); });
+window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { if (model) { renderPanels(); redrawWhatIf(); } });
+setupWhatIf();
 load('');
 loadDayList();

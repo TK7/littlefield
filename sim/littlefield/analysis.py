@@ -99,7 +99,7 @@ def mmc_lead(cfg, mix, lam):
 def presets(start, cfg, rop=6000, qty=26700, final_day=None):
     """The dashboard's three preset lines, starting from `start`."""
     d = start.day + 1
-    keep = Policy(final_day=final_day)
+    keep = Policy()  # no changes at all, so no final order either
     safe = Policy(machines={d: (3, 4, 3)}, rop={d: rop}, qty={d: qty}, schedule={d: PRIORITY_STEP4},
                   ladder=True, ladder_top=2, final_day=final_day)
     rec = Policy(machines={d: (3, 4, 3)}, rop={d: rop}, qty={d: qty}, schedule={d: PRIORITY_STEP4},

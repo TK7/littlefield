@@ -88,6 +88,18 @@ def replay_arrivals(days, rng):
     return times
 
 
+def schedule_rule(text):
+    """The Settings tab's scheduling cell ('FIFO', 'Step 4', 'Prioritize Step 2', ...) as a model rule."""
+    t = str(text or '').strip().lower()
+    if t in (r.lower() for r in SCHEDULES):
+        return next(r for r in SCHEDULES if r.lower() == t)
+    if '4' in t:
+        return SCHEDULES[2]
+    if '2' in t:
+        return SCHEDULES[1]
+    return FIFO
+
+
 def start_state(snap, demand=None):
     """Estimated factory state at the end of the latest day in the snapshot.
 
@@ -137,7 +149,7 @@ def start_state(snap, demand=None):
     contract = last['contract'] or 1
     jobs = [(day - (n - i) / rate, contract, where) for i, where in enumerate(placed)]
 
-    sched = s.get('sched') if s.get('sched') in SCHEDULES else FIFO
+    sched = schedule_rule(s.get('sched'))
     return StartState(
         day=day, cash=last['cash'], machines=machines, kits=int(kits),
         order_arrives=order_arrives, order_qty=int(on_order) if recent else 0,

@@ -48,6 +48,20 @@ settings. With the fitted values below the model reproduces, averaged over 40 ru
 | Utilization | 85% / 83% / 87% | 86% / 84% / 88% |
 | Cash on Day 50 | $1,106,279 | $1,110,463 |
 
+After the restart (`test/fixtures/day64.json`), the replay follows what the team did:
+3/4/3 from Day 51, $1,000 contract from Day 56, $1,250 from Day 61, the 26,700-kit
+order on Day 52. With no refitting:
+
+| | Real game | Model |
+|---|---|---|
+| Revenue per job, Days 61-64 ($1,250 contract) | $1,163 | about $1,140 |
+| Lead time, Days 61-64 | 0.41-0.50 days | 0.42-0.47 days |
+| Cash on Day 64 | $792,147 | $792,886 |
+
+The model drains the Day 50 backlog about half a day faster than the real factory did
+(Days 50-58): it underestimates how long Station 1's queue was when it was overloaded.
+That does not affect the decisions left, with the factory now below 70% utilization.
+
 Fitted values (`python3 -m littlefield fit` repeats the search):
 
 - **Process times** 0.1171 / 0.1749 / 0.1226 machine-days per job, measured from

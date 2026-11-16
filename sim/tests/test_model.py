@@ -166,6 +166,36 @@ class ReplayWithChanges(unittest.TestCase):
         self.assertLess(abs(s['cash_sim'] / s['cash_real'] - 1), 0.05)
 
 
+class AfterTheRestart(unittest.TestCase):
+    """Day 64 snapshot: machines bought on Day 51, $1,000 contract from Day 56, $1,250 from Day 61."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.snap = S.load(os.path.join(FIXTURES, 'day64.json'))
+        cls.real, cls.runs = C.replay(cls.snap, S.config(cls.snap), runs=30)
+
+    def test_replay_follows_the_restart_moves(self):
+        pol = C.history_policy(self.real)
+        self.assertEqual(pol.machines, {1: (2, 3, 2), 51: (3, 4, 3)})
+        self.assertEqual(pol.contract, {1: 1, 56: 2, 61: 3})
+
+    def test_revenue_per_job_on_the_1250_contract(self):
+        idx = [i for i, d in enumerate(self.real) if d['day'] >= 61]
+        real = sum(self.real[i]['revenue'] for i in idx) / sum(self.real[i]['completed'] for i in idx)
+        rev = sum(r['days'][i]['revenue'] for r in self.runs for i in idx)
+        done = sum(r['days'][i]['completed'] for r in self.runs for i in idx)
+        self.assertLess(abs(rev / done - real), 75)   # real $1,163 a job over Days 61-64
+
+    def test_cash_on_day_64(self):
+        cash = sum(r['final_cash'] for r in self.runs) / len(self.runs)
+        self.assertLess(abs(cash / self.real[-1]['cash'] - 1), 0.01)
+
+    def test_start_state(self):
+        st = S.start_state(self.snap)
+        self.assertEqual((st.day, st.machines, st.kits, st.contract, st.schedule), (64, (3, 4, 3), 21540, 3, PRIORITY_STEP4))
+        self.assertIsNone(st.order_arrives)
+
+
 class StartingFromASnapshot(unittest.TestCase):
     def test_day50_state(self):
         st = S.start_state(DAY50)

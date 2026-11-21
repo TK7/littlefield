@@ -135,7 +135,9 @@ function buildDeck() {
   const finals = [[0, 'None (keep ordering)']];
   for (let d = first; d <= last; d++) finals.push([d, 'Day ' + d]);
   card('Final kit order', 'not placed', select('wiFinal', finals, state.deck.finalDay));
-  card('Demand assumed (jobs a day)', round1(state.init.demand) + ' (last 14 days)', number('wiDemand', round1(state.deck.demand), 4, 30, 0.1));
+  card('Demand assumed (jobs a day)', round1(state.init.demand) + (state.init.demandSource === 'plan'
+    ? ' (Settings plan; last 14 days ' + round1(state.init.recentDemand) + ')' : ' (last 14 days)'),
+    number('wiDemand', round1(state.deck.demand), 4, 30, 0.1));
   updateNotes();
 }
 
@@ -349,8 +351,21 @@ function drawFinal() {
     ? 'A kit order of ' + int(st.orderQty) + ' is on the way, due about Day ' + Math.ceil(st.orderArrives) + '. A new order cannot be placed until it arrives.'
     : 'No kit order is on the way now.');
   status.push('Kits on hand (est.): ' + int(st.kits) + '. Cash: ' + usd(st.cash) + '.');
+  const nr = f.nextRegular;
+  if (nr && nr.beforeControlEnds >= 0.5) {
+    status.push('If nothing changes, Littlefield places its next automatic order of ' + int(nr.kits) + ' kits around Day ' + nr.day
+      + '. To make the final order that one instead, change the settings before then.');
+  }
+  const lo = state.init.lastOrder;
+  if (lo && lo.kits !== st.qty) {
+    status.push('Check the Settings tab: the last order (Day ' + lo.day + ') was ' + int(lo.kits) + ' kits, but the order quantity there is ' + int(st.qty) + '.');
+  }
+  if (f.sizeRule) {
+    status.push('Size rule: ' + int(f.sizeRule.kitsPerDay) + ' kits a day (' + round1(f.demand) + ' jobs) from the moment it is placed until Day '
+      + f.sizeRule.until.toFixed(1) + ', minus kits on hand and on order. Each day of delay takes about ' + int(f.sizeRule.kitsPerDay) + ' kits off.');
+  }
   if (String(s.finalPlaced || '').toUpperCase().startsWith('Y')) status.unshift('The Settings tab says the final order has been placed.');
-  if (st.day < f.first) status.push('The window opens on Day ' + f.first + ', ' + (f.first - st.day) + ' days from the snapshot day.');
+  if (st.day < f.first - 1) status.push('The window opens on Day ' + f.first + ', ' + (f.first - st.day) + ' days from the snapshot day.');
   $('wiFinalStatus').textContent = status.join(' ');
   const body = $('wiFinalTable').tBodies[0];
   if (!f.rows.length) {

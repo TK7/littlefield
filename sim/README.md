@@ -36,64 +36,58 @@ machine-readable output, `--runs N` for more or fewer runs.
 
 ## Calibration
 
-Two periods are replayed with the real daily order counts and the team's actual settings:
-the congested Days 1-50 (2/3/2, stockouts, $750 contract) and the post-restart Days
-61-78 (3/4/3, $1,250 contract, no stockouts). Averaged over 40 runs:
+The model is checked by replaying the real game: the real daily order counts go in, with
+the team's actual machines, contracts and kit orders, and the model must reproduce what
+Littlefield reported. Two regimes:
 
-| Days 1-50 | Real game | Model |
+| Days 61-198, $1,250 contract, 3/4/3 (`test/fixtures/day198.json`, 100 runs) | Real game | Model |
+|---|---|---|
+| Revenue per job | $1,142 | $1,144 (10th to 90th percentile $1,135 to $1,157) |
+| Average lead time | 0.472 days | 0.471 days |
+| Cash on Day 198 | $2,014,268 | $2,024,879 (real is at the model's 35th percentile) |
+
+| Days 1-50, congested, stockouts, $750 contract (40 runs) | Real game | Model |
 |---|---|---|
 | Kit order days | 9, 16, 25, 32, 41, 48 | 9, 16, 25, 32, 41, 48 (every run) |
-| Stockouts start | Days 11, 18, 27, 34, 43, 50 | same waves, within a day |
-| Average lead time | 2.87 days | 2.84 days |
-| Queues, jobs (St1 / St2 / St3) | 20.1 / 3.6 / 8.3 | 20.2 / 2.8 / 8.7 |
-| Utilization | 85% / 83% / 87% | 86% / 84% / 88% |
-| Cash on Day 50 | $1,106,279 | $1,110,370 |
-
-| Days 61-78, $1,250 contract (`test/fixtures/day78.json`) | Real game | Model |
-|---|---|---|
-| Revenue per job | $1,162 | $1,151 (10th to 90th percentile over 18 days: $1,115 to $1,176) |
-| Average lead time | 0.454 days | 0.458 days |
-| Days earning the full $1,250 | 2 of 18 (Days 69, 76) | about 1 of 18 |
-| Cash on Day 78 | $1,022,984 | $1,023,951 |
+| Average lead time | 2.87 days | 2.67 days |
+| Queues, jobs (St1 / St2 / St3) | 20.1 / 3.6 / 8.3 | 20.2 / 2.7 / 6.3 |
+| Cash on Day 50 | $1,106,279 | $1,111,951 |
 
 Fitted values:
 
-- **Process times** about 0.117 / 0.175 / 0.121 machine-days per job, measured from
-  utilization in each snapshot. Station 3 is faster than the Settings tab's 0.128.
-- **Variability** (0 = constant, 1 = exponential): Station 1 0.0, Station 2 0.25,
-  Station 3 1.0.
-- **Step 2 share of Station 2 time**: 0.3 (step 4 takes the larger part). It matches
-  Station 2's queue on Days 1-50 better than 0.5 (2.8 against 2.3 jobs; real 3.6) and
-  leaves Days 61-78 unchanged.
+- **Process times** about 0.117 / 0.175 / 0.122 machine-days per job, measured from
+  utilization in each snapshot. They have not changed between Days 61 and 198.
+- **Variability** (0 = constant, 1 = exponential): Station 1 0.0, Station 2 0.5,
+  Station 3 0.75. Fitted on Days 61-198 (about 2,000 jobs) to revenue per job, lead time
+  and its day-to-day spread. Every remaining decision falls in this quiet regime, so the
+  congested Days 1-50 are reproduced a little less closely (lead time 2.67 against 2.87).
+- **Step 2 share of Station 2 time**: 0.3 (step 4 takes the larger part).
 - **Lots**: each job enters the factory as one lot of 60 kits and is processed whole at
-  each step, as the game's help page says and as the model does. The setup time is
-  incurred once per lot, so it is already inside the measured process times.
+  each step, as the game's help page says and as the model does. The per-lot setup is
+  inside the measured process times.
 
-### The Station 2 correction (Day 78)
+History of the fit: Station 2 was 0.75 and Station 3 1.0 from Days 1-50 alone; Day 78
+data moved Station 2 to 0.25; by Day 198 that setting ran $16 a job low over 138 days
+(real at the model's 93rd percentile), and the refit above brought it to the middle.
 
-Fitted on Days 1-50 alone, Station 2's variability came out at 0.75. Against the
-post-restart days that setting gets the average lead time right (0.459 against 0.454
-days) but revenue per job wrong: $1,119 against the real $1,162. Revenue depends on how
-many jobs finish inside half a day, and 0.75 gave Station 2 too long a tail. No single
-setting fits both periods exactly:
+Replaying a later snapshot estimates the reorder point that was in force for each past kit
+order from the stock levels on that day (`calibrate.order_rops`).
 
-| Station 2 variability | Days 1-50: Station 2 queue (real 3.6) | Days 61-78: revenue per job (real $1,162) |
-|---|---|---|
-| 0.75 (before) | 3.8 | $1,119 |
-| 0.5 | 2.8 | $1,140 |
-| 0.25 (now) | 2.3 | $1,148 to $1,156 |
+## The final kit order
 
-The rest of the game runs uncongested, so 0.25 is used, together with a 0.3 step 2 share.
-Lot splitting was ruled out (one lot of 60 kits per job). Real days with an average lead
-time below the sum of the process times (Day 76: 0.336 days) are within the model's
-day-to-day range: with Station 3 fully random, many jobs finish faster than average, and
-the quickest of 18 days in the model averages about 0.357 days. Over 18 days, revenue per
-job varies by about $34 from luck alone, and the real $1,162 sits at the model's 58th
-percentile, so no drift is measurable now.
+`python3 -m littlefield final-order <snapshot> --demand 15 --qty 26100` gives, for every
+day left in the window, the order size, whether it goes through, and Day 268 cash. It
+starts from the current settings (pass `--rop` / `--qty` if the Settings tab is out of date)
+and uses the Settings tab's planning demand unless `--demand` is given.
 
-Replaying a later snapshot now estimates the reorder point that was in force for each
-past kit order from the stock levels on that day (`calibrate.order_rops`). Before, it used
-the current setting for every past order, which moved Days 1-50 orders too early.
+- **Size** = kits a day (demand x 60) from the moment the order is placed until Day 267.6
+  (Day 268 less the time a job takes to go through), minus kits on hand and on order.
+  Each day of delay takes one day of demand off.
+- Checked on Day 198 at 15.0 jobs a day (400 runs): ordering 1,200 kits less than this
+  costs about $1,500 on average; 1,200 more costs about $4,000. A short final day or two
+  costs less than kits left over at $10 each.
+- The day matters little (within about $3,000 from Day 199 to 217) as long as the order
+  goes through while there is still time to set the quantity back to 0.
 
 ## What the calibrated model says that differs from the Sheet
 

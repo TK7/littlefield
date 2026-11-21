@@ -48,11 +48,10 @@ class Config:
     # unchanged. Each job is one lot of 60 kits, so the per-lot setup is inside these times.
     step2_share: float = 0.3
     # Variability of process times at each station (coefficient of variation,
-    # 0 = constant, 1 = exponential). Station 1 constant, Station 3 fully random.
-    # Station 2 was 0.75 from the congested Days 1-50 alone; 0.25 fits the
-    # post-restart days (61-78) far better and Days 1-50 nearly as well. See
-    # sim/README.md "Calibration".
-    cv: tuple = (0.0, 0.25, 1.0)
+    # 0 = constant, 1 = exponential). Fitted on the 138 post-restart days (61-198,
+    # about 2,000 jobs on the $1,250 contract): revenue per job, lead time and its
+    # day-to-day spread. Station 1 constant. See sim/README.md "Calibration".
+    cv: tuple = (0.0, 0.5, 0.75)
     # contract number -> (revenue, quoted lead time, maximum lead time)
     contracts: dict = field(default_factory=lambda: {1: (750.0, 7.0, 14.0), 2: (1000.0, 1.0, 3.0), 3: (1250.0, 0.5, 1.0)})
 

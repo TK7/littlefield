@@ -4,7 +4,8 @@
 
 import { policy } from './model.js';
 import { startFromSnapshot, configFromSnapshot, daily, recentDemand } from './snapshot.js';
-import { project, presets, sweep, steady, finalOrder, mmcLead, FINAL_ORDER_STEPS } from './analysis.js';
+import { project, presets, sweep, steady, finalOrder, mmcLead, pct, FINAL_ORDER_STEPS } from './analysis.js';
+import { simulate } from './model.js';
 
 let ctx = null; // { cfg, start, demand }
 
@@ -30,7 +31,13 @@ const handlers = {
     const cfg = configFromSnapshot(snap);
     const start = startFromSnapshot(snap);
     const days = daily(snap);
-    const demand = recentDemand(days);
+    // Planning demand from the Settings tab (B15) when set: the team's expectation for the
+    // rest of the game. Recent demand is shown alongside but does not drive projections.
+    const recent = recentDemand(days);
+    const plan = Number(snap.settings && snap.settings.demandPlan) || 0;
+    const demand = plan > 0 ? plan : recent;
+    // The order quantity Littlefield actually used last, from cash; the Settings tab can lag.
+    const lastOrder = days.filter((d) => d.kitsOrdered).at(-1) || null;
     ctx = { cfg, start, demand };
     const lines = {};
     if (start.day < cfg.gameEnd) {
@@ -39,7 +46,9 @@ const handlers = {
       }
     }
     return {
-      demand, ptimes: cfg.ptimes, cv: cfg.cv, start: { ...start, jobs: start.jobs.length },
+      demand, demandSource: plan > 0 ? 'plan' : 'recent', recentDemand: recent,
+      lastOrder: lastOrder && { day: lastOrder.day, kits: lastOrder.kitsOrdered },
+      ptimes: cfg.ptimes, cv: cfg.cv, start: { ...start, jobs: start.jobs.length },
       waiting: start.jobs.filter((j) => j[2] === 'kits').length, lines,
     };
   },
@@ -70,16 +79,32 @@ const handlers = {
     };
   },
 
-  final({ settings, runs = 30 }) {
+  final({ settings, runs }) {
     const { cfg, start } = ctx;
     const demand = settings.demand || ctx.demand;
     const first = Math.max(193, start.day + 1);
     const last = cfg.controlEnd - 1;
+    // Every day once the window is close (more runs, so neighbouring days compare fairly);
+    // every fourth day while it is far off.
+    const near = last - first <= 24;
+    const step = near ? 1 : 4;
+    const n = runs || (near ? 60 : 30);
     const days = [];
-    for (let d = first; d <= last; d += 4) days.push(d);
+    for (let d = first; d <= last; d += step) days.push(d);
     if (days.length && days[days.length - 1] !== last) days.push(last);
-    const rows = first <= last ? finalOrder(start, cfg, { ...policyFrom(start, settings), finalDay: null }, { days, demand, runs }) : [];
-    return { rows, steps: FINAL_ORDER_STEPS, first, last };
+    const base = { ...policyFrom(start, settings), finalDay: null };
+    const rows = first <= last ? finalOrder(start, cfg, base, { days, demand, runs: n }) : [];
+    // When Littlefield's own reorder rule would place the next order if nothing changes.
+    const next = [];
+    for (let k = 0; k < n; k++) {
+      const r = simulate({ cfg, pol: base, start, seed: 1 + k, demand });
+      const o = r.orders.find(([t]) => t >= start.day);
+      if (o) next.push(o);
+    }
+    const nextRegular = next.length ? { day: Math.ceil(pct(next.map((o) => o[0]), 0.5)), kits: next[0][1], share: next.length / n,
+      beforeControlEnds: next.filter((o) => o[0] < cfg.controlEnd).length / n } : null;
+    return { rows, steps: FINAL_ORDER_STEPS, first, last, demand, nextRegular,
+      sizeRule: { kitsPerDay: demand * cfg.kitsPerJob, until: cfg.gameEnd - (cfg.ptimes[0] + cfg.ptimes[1] + cfg.ptimes[2]) } };
   },
 };
 

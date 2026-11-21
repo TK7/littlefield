@@ -18,6 +18,7 @@ import sys
 from . import analysis as A
 from . import calibrate as C
 from . import snapshot as S
+from .model import Policy, simulate
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 DEFAULT_SNAPSHOT = os.path.join(HERE, '..', '..', 'test', 'fixtures', 'day50.json')
@@ -33,13 +34,17 @@ def main(argv=None):
     ap.add_argument('snapshot', nargs='?', default=DEFAULT_SNAPSHOT)
     ap.add_argument('--runs', type=int, default=None)
     ap.add_argument('--demand', type=float, default=None)
+    ap.add_argument('--rop', type=int, default=None, help='reorder point set in Littlefield now (default: Settings tab)')
+    ap.add_argument('--qty', type=int, default=None, help='order quantity set in Littlefield now (default: Settings tab)')
     ap.add_argument('--json', action='store_true')
     a = ap.parse_args(argv)
 
     snap = S.load(a.snapshot)
     cfg = S.config(snap)
     days = S.daily(snap)
-    demand = a.demand or sum(d['accepted'] for d in days[-14:]) / min(14, len(days))
+    # Demand: --demand, else the Settings tab's planning demand, else the last 14 days.
+    plan = (snap.get('settings') or {}).get('demandPlan') or 0
+    demand = a.demand or plan or sum(d['accepted'] for d in days[-14:]) / min(14, len(days))
     out = None
 
     if a.command == 'validate':
@@ -96,17 +101,34 @@ def main(argv=None):
                     name, usd(p['final_p50']), usd(p['final_p10']), usd(p['final_p90']), ('   switches: ' + sw) if sw else ''))
 
     elif a.command == 'final-order':
-        start = S.start_state(snap)
-        base = A.presets(start, cfg)['Recommended (3/4/3, up to $1,250)']
+        start = S.start_state(snap, demand=demand)
+        if a.rop is not None:
+            start.rop = a.rop
+        if a.qty is not None:
+            start.qty = a.qty
+        base = Policy()   # keep today's settings; only the final order changes
         first = max(193, start.day + 1)
-        rows = A.final_order(start, cfg, base, days=range(first, 218, 4 if first < 214 else 1), demand=demand, runs=a.runs or 40)
-        out = {'rows': rows, 'steps': A.FINAL_ORDER_STEPS}
+        last = cfg.control_end - 1
+        near = last - first <= 24
+        runs = a.runs or (300 if near else 40)
+        rows = A.final_order(start, cfg, base, days=range(first, last + 1, 1 if near else 4), demand=demand, runs=runs)
+        nxt = [next(((t, q) for t, q in r['orders'] if t >= start.day), None)
+               for r in (simulate(cfg, base, start, seed=1 + k, demand=demand) for k in range(min(runs, 100)))]
+        nxt = [x for x in nxt if x]
+        out = {'rows': rows, 'steps': A.FINAL_ORDER_STEPS, 'demand': demand, 'rop': start.rop, 'qty': start.qty,
+               'next_automatic_order_day_p50': A.pct([t for t, _ in nxt], 0.5) if nxt else None}
         if not a.json:
-            print('Final kit order, Recommended settings, demand %.1f jobs a day' % demand)
-            print('%5s %7s %9s %11s %12s %14s' % ('Day', 'Fires', 'Kits', 'Cost', 'Kits left', 'Day 268 cash'))
+            print('Final kit order from Day %d: demand %.1f jobs a day, reorder point %s, order quantity %s, %d runs a day'
+                  % (start.day, demand, '{:,}'.format(start.rop), '{:,}'.format(start.qty), runs))
+            print('Kits on hand %s, %s.' % ('{:,}'.format(start.kits),
+                  'order of %s on the way, due about Day %.1f' % ('{:,}'.format(start.order_qty), start.order_arrives) if start.order_arrives else 'no order on the way'))
+            if nxt:
+                print('If nothing changes, the next automatic order (%s kits) fires around Day %.1f.' % ('{:,}'.format(nxt[0][1]), A.pct([t for t, _ in nxt], 0.5) + 1))
+            print('%5s %7s %8s %9s %11s %10s %15s %15s' % ('Day', 'Fires', 'Placed', 'Kits', 'Cost', 'Kits left', 'Cash p50', 'Cash p10'))
             for r in rows:
-                print('%5d %6.0f%% %9s %11s %12s %14s' % (r['day'], 100 * r['fires'], '{:,.0f}'.format(r['size_p50'] or 0),
-                      usd(r['cost_p50']), '{:,.0f}'.format(r['kits_left_p50']), usd(r['final_cash_p50'])))
+                print('%5d %6.0f%% %8.1f %9s %11s %10s %15s %15s' % (r['day'], 100 * r['fires'], (r['placed_p50'] or 0) + 1, '{:,.0f}'.format(r['size_p50'] or 0),
+                      usd(r['cost_p50']), '{:,.0f}'.format(r['kits_left_p50']), usd(r['final_cash_p50']), usd(r['final_cash_p10'])))
+            print('"Placed" is the day the order actually goes in: later than the settings change when an order is on the way.')
             print('\nHow to place it:')
             for i, step in enumerate(A.FINAL_ORDER_STEPS, 1):
                 print('  %d. %s' % (i, step))

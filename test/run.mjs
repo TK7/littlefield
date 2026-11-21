@@ -132,7 +132,14 @@ await test('worker: final order table covers the window and every order goes thr
   assert.equal(f.rows[0].day, 193);
   assert.equal(f.rows.at(-1).day, 217);
   assert.ok(f.rows.every((r) => r.fires === 1));
-  assert.ok(f.rows[0].size > 30000 && f.rows[0].size < 45000);
+  // Day 64 fixture: Settings planning demand 15.5 jobs a day drives the size (930 kits a day).
+  assert.ok(f.rows[0].size > 55000 && f.rows[0].size < 68000, String(f.rows[0].size));
+  assert.equal(f.rows.length, 25);                              // every day, 193 to 217
+  assert.ok(f.nextRegular.day > 70 && f.nextRegular.day < 90);  // 21,540 kits on hand, reorder point 6,000
+  assert.equal(f.sizeRule.kitsPerDay, 930);
+  const init = handlers.init({ snap, runs: 2 });
+  assert.equal(init.demandSource, 'plan');
+  assert.deepEqual(init.lastOrder, { day: 52, kits: 26700 });
 });
 
 // Phase 3: the advisor.

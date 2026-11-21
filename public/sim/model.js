@@ -35,8 +35,8 @@ export function defaultConfig() {
     dailyRate: 1.1 ** (1 / 365) - 1, wipLimit: 100, controlEnd: 218, gameEnd: 268, resale: 10000,
     prices: [90000, 80000, 100000],
     ptimes: [0.1171, 0.1749, 0.1226],   // measured on Days 1-50
-    step2Share: 0.5,
-    cv: [0.0, 0.25, 1.0],                // fitted on Days 1-50 and 61-78 (see sim/README.md)
+    step2Share: 0.3,                     // fitted on Days 1-50 and 61-78 (see sim/README.md)
+    cv: [0.0, 0.5, 0.75],                // fitted on Days 61-198 (see sim/README.md)
     contracts: { 1: [750, 7, 14], 2: [1000, 1, 3], 3: [1250, 0.5, 1] },
   };
 }

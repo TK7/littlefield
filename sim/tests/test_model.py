@@ -129,12 +129,14 @@ class AgainstTheRealGame(unittest.TestCase):
             self.assertEqual(days, [9, 16, 25, 32, 41, 48])
 
     def test_lead_time(self):
-        self.assertLess(abs(self.s['lead_bias']), 0.2)
-        self.assertLess(self.s['lead_rmse'], 0.45)
+        # Variability is fitted on the quiet post-restart days (61-198), where every remaining
+        # decision falls; the congested Days 1-50 are reproduced a little less closely.
+        self.assertLess(abs(self.s['lead_bias']), 0.3)
+        self.assertLess(self.s['lead_rmse'], 0.55)
 
     def test_queues_and_utilization(self):
         for k in range(3):
-            self.assertLess(abs(self.s['queue_real'][k] - self.s['queue_sim'][k]), 1.0 + 0.1 * self.s['queue_real'][k])
+            self.assertLess(abs(self.s['queue_real'][k] - self.s['queue_sim'][k]), 1.0 + 0.3 * self.s['queue_real'][k])
             self.assertLess(abs(self.s['util_real'][k] - self.s['util_sim'][k]), 0.03)
 
     def test_cash_on_day_50_within_one_percent(self):
@@ -219,6 +221,37 @@ class OnTheTwelveHundredFiftyContract(unittest.TestCase):
         self.assertEqual(sorted(rops), [9, 16, 25, 32, 41, 48, 52])
         for day in (9, 16, 25, 32, 41, 48):        # the setting was 1,440 then
             self.assertLess(abs(rops[day] - 1440), 400)
+
+
+class ThroughDay198(unittest.TestCase):
+    """138 days on the $1,250 contract (61-198, about 2,000 jobs): the main calibration target."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.snap = S.load(os.path.join(FIXTURES, 'day198.json'))
+        cls.real, cls.runs = C.replay(cls.snap, S.config(cls.snap), runs=20)
+        cls.c3 = C.contract_period(cls.real, cls.runs)
+
+    def test_revenue_per_job_and_lead_time(self):
+        self.assertEqual((self.c3['days'][0], self.c3['days'][-1]), (61, 198))
+        self.assertAlmostEqual(self.c3['rev_real'], 1142, delta=1)
+        self.assertLess(abs(self.c3['rev_sim'] - self.c3['rev_real']), 15)
+        self.assertLess(abs(self.c3['lead_sim'] - self.c3['lead_real']), 0.01)
+
+    def test_cash_on_day_198(self):
+        cash = sum(r['final_cash'] for r in self.runs) / len(self.runs)
+        self.assertLess(abs(cash / self.real[-1]['cash'] - 1), 0.01)
+
+    def test_final_order_from_day_198(self):
+        st = S.start_state(self.snap, demand=15.0)
+        st.qty = 26100                          # what Littlefield ordered on Days 113, 142 and 173
+        cfg = S.config(self.snap)
+        a = A.final_order(st, cfg, Policy(), days=[200], demand=15.0, runs=20)[0]
+        b = A.final_order(st, cfg, Policy(), days=[210], demand=15.0, runs=20)[0]
+        self.assertEqual((a['fires'], b['fires']), (1.0, 1.0))
+        self.assertLess(abs(a['size_p50'] - 53340), 600)   # replaces the next automatic order
+        self.assertLess(abs(b['size_p50'] - 27240), 600)   # after the automatic 26,100 has arrived
+        self.assertLess(abs(a['final_cash_p50'] - b['final_cash_p50']), 10000)
 
 
 class StartingFromASnapshot(unittest.TestCase):

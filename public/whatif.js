@@ -247,6 +247,7 @@ async function run() {
     $('wiStatus').textContent = 'Updated in ' + ((performance.now() - t0) / 1000).toFixed(1) + ' s. Each line is the median of 200 runs from Day '
       + state.init.start.day + ', with demand at ' + round1(w.demand) + ' jobs a day.';
     drawCash(); drawFinal(); drawCurve();
+    document.dispatchEvent(new CustomEvent('lf:whatif-ready'));
   } catch (e) {
     $('wiStatus').textContent = 'Simulation failed: ' + e.message;
   }

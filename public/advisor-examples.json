@@ -1,0 +1,4 @@
+{
+  "note": "Saved advisor answers shown in the portfolio version. Make with: node scripts/curate-advisor.mjs",
+  "examples": []
+}

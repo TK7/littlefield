@@ -13,16 +13,7 @@ const close = (a, b, what, tol = 1e-7) => {
   assert.ok(Math.abs(a - b) <= tol * Math.max(1, Math.abs(b)), what + ': ' + a + ' vs ' + b);
 };
 
-export function replayArrivals(days, rng) {
-  const out = [];
-  for (const d of days) {
-    const xs = [];
-    for (let i = 0; i < Math.trunc(d.accepted); i++) xs.push(d.day - 1 + rng.random());
-    xs.sort((x, y) => x - y);
-    out.push(...xs);
-  }
-  return out;
-}
+import { replayArrivals } from '../public/sim/calibrate.js';
 
 function compareRun(js, py, label) {
   assert.equal(js.days.length, py.days.length, label + ' days');
@@ -77,6 +68,17 @@ test('sim: replay of Days 1-50 matches Python', () => {
   const arrivals = replayArrivals(daily(snap), new Rng(10001));
   const r = simulate({ cfg: configFromSnapshot(snap), pol: policy(), start: startState(), seed: 1, arrivals });
   compareRun(r, golden.runs.C.result, 'C');
+});
+
+test('sim: history replay of Days 1-78 matches Python (machines, contracts, past kit orders)', async () => {
+  const { replay, orderRops, contractPeriod } = await import('../public/sim/calibrate.js');
+  const snap = fixture('day78.json');
+  const { real, runs } = replay(snap, configFromSnapshot(snap), { runs: 3, seed: 1 });
+  const g = golden.runs.D;
+  runs.forEach((r, k) => compareRun(r, g.result[k], 'D' + k));
+  const c = contractPeriod(real, runs);
+  close(c.revSim, g.contract3.rev_sim, 'rev'); close(c.leadSim, g.contract3.lead_sim, 'lead');
+  assert.deepEqual(orderRops(daily(fixture('day198.json'))), Object.fromEntries(Object.entries(g.order_rops_day198).map(([k, v]) => [k, v])));
 });
 
 if (import.meta.url === 'file://' + process.argv[1]) {

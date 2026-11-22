@@ -118,6 +118,11 @@ footer { padding: 8px 0; }
 .notice.warn { background: var(--warning-bg); }
 .notice.bad { background: var(--critical-bg); color: var(--text-primary); }
 .chart-tall { position: relative; height: 300px; margin: 6px 0 10px; }
+.chart-mid { position: relative; height: 220px; margin: 6px 0 10px; }
+.size-check { margin-top: 14px; border-top: 1px solid var(--grid); padding-top: 8px; }
+.size-check .panel-head { align-items: center; }
+.size-check h3 { margin: 6px 0; }
+tr.ours-row td { font-weight: 600; background: var(--good-bg); }
 tr.whatif-row td { font-weight: 600; }
 tr.good-row td { background: var(--good-bg); }
 tr.warn-row td { background: var(--warning-bg); }
@@ -146,6 +151,27 @@ button:disabled, select:disabled, input:disabled { opacity: 0.55; cursor: not-al
 .adv-form { display: flex; gap: 6px; align-items: flex-end; }
 .adv-form textarea { flex: 1; font: inherit; color: inherit; background: var(--page); border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px; resize: vertical; min-height: 44px; }
 .adv-foot a { color: inherit; }
+body.portfolio .adv-briefings, body.portfolio .adv-form, body.portfolio .adv-foot, body.portfolio #advDay { display: none; }
+
+button.primary { background: var(--text-primary); color: var(--page); border-color: transparent; font-weight: 600; }
+.present-bar { display: none; }
+body.presenting .present-bar { display: block; position: sticky; top: 0; z-index: 15; max-width: 1180px; margin: 0 auto 10px;
+  background: var(--surface-1); border: 1px solid var(--border); border-radius: 10px; padding: 10px 16px 12px; box-shadow: 0 2px 12px rgba(0,0,0,0.08); }
+.p-top { display: flex; flex-wrap: wrap; gap: 8px; justify-content: space-between; align-items: center; }
+.p-map { display: flex; flex-wrap: wrap; gap: 6px; }
+.p-map button { font-size: 13px; padding: 4px 10px; min-height: 30px; }
+.p-map button.current { background: var(--text-primary); color: var(--page); border-color: transparent; }
+.p-nav { display: flex; gap: 8px; align-items: center; }
+.present-bar h2 { font-size: 22px; margin: 2px 0 6px; }
+.p-bullets { margin: 0; padding-left: 20px; font-size: 16px; line-height: 1.5; }
+.p-bullets li.warn { color: var(--critical); }
+body.presenting main > section:not(.on), body.presenting #control, body.presenting header.top .top-actions label,
+body.presenting header.top #daySelect, body.presenting header.top #refresh, body.presenting #presentBtn { display: none; }
+body.presenting .chart-tall { height: 360px; }
+.result { text-align: center; }
+.result .r-cash strong { font-size: 44px; letter-spacing: -0.01em; }
+.result .r-rank { font-size: 20px; font-weight: 600; }
+@media (max-width: 640px) { .p-nav { width: 100%; justify-content: space-between; } .result .r-cash strong { font-size: 34px; } }
 
 #stockouts th, #stockouts td, #utilAudit th:not(:first-child), #utilAudit td:not(:first-child) { text-align: right; }
 

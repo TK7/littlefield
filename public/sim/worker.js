@@ -6,6 +6,7 @@ import { policy } from './model.js';
 import { startFromSnapshot, configFromSnapshot, daily, recentDemand } from './snapshot.js';
 import { project, presets, sweep, steady, finalOrder, mmcLead, pct, FINAL_ORDER_STEPS } from './analysis.js';
 import { simulate } from './model.js';
+import { drift } from './calibrate.js';
 
 let ctx = null; // { cfg, start, demand }
 
@@ -77,6 +78,38 @@ const handlers = {
       leadMean: r.leadMean, leadP90: r.leadP90, busiest: Math.max(...r.util),
       revenuePerJob: { 'Contract 1 ($750)': r.rev1, 'Contract 2 ($1,000)': r.rev2, 'Contract 3 ($1,250)': r.rev3 },
     };
+  },
+
+  // How each version of the model's calibration compares with this extract's real days.
+  drift({ snap, runs = 16 }) {
+    return drift(snap, { runs });
+  },
+
+  // Final order size: Day 268 cash for sizes around the model's own, placed on `day`.
+  sizeSweep({ settings, day, runs = 150 }) {
+    const { cfg, start } = ctx;
+    const demand = settings.demand || ctx.demand;
+    const base = { ...policyFrom(start, settings), finalDay: day, finalQty: null };
+    const auto = simulate({ cfg, pol: base, start, seed: 1, demand }).orders.find(([t]) => t >= day - 1);
+    if (!auto) return { day, rows: [] };
+    const centre = Math.round(auto[1] / 60);
+    const rows = [];
+    for (const b of [-18, -12, -8, -4, -2, 0, 2, 4, 8, 12, 18]) {
+      const kits = (centre + b) * 60;
+      if (kits <= 0) continue;
+      const cash = [];
+      let short = 0;
+      for (let k = 0; k < runs; k++) {
+        const r = simulate({ cfg, pol: { ...base, finalQty: kits }, start, seed: 7000 + k, demand });
+        cash.push(r.finalCash);
+        if (r.days.some((d) => d.day > cfg.gameEnd - 13 && d.waiting > 0.5)) short++;
+      }
+      rows.push({ batches: centre + b, kits, cost: kits * cfg.kitCost + cfg.orderFee,
+        mean: cash.reduce((t, v) => t + v, 0) / runs, p10: pct(cash, 0.1), p50: pct(cash, 0.5), shortShare: short / runs });
+    }
+    const best = Math.max(...rows.map((r) => r.mean));
+    rows.forEach((r) => { r.vsBest = r.mean - best; });
+    return { day, demand, modelBatches: centre, rows };
   },
 
   final({ settings, runs }) {

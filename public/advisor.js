@@ -193,19 +193,23 @@ export function competitorData(snap, currentDay) {
   const nearest = (perDay) => SIGNATURES.reduce((a, b) => (Math.abs(b.perDay - perDay) < Math.abs(a.perDay - perDay) ? b : a)).label;
   const out = teams.map((name, i) => {
     const c = i + 1;
-    const recent = (last[c] - prev[c]) / (last[0] - prev[0]);
-    const since = (last[c] - first[c]) / (last[0] - first[0]);
+    // A blank leaderboard cell arrives as 0: treat it as "not entered", not as $0.
+    const have = rows.filter((r) => r[c] > 0);
+    if (have.length < 2) return { team: name, ours: name === (snap.settings && snap.settings.team), cashLatest: have.length ? r0(have[have.length - 1][c]) : null, missing: true };
+    const lastR = have[have.length - 1], prevR = have[have.length - 2], firstR = have[0];
+    const recent = (lastR[c] - prevR[c]) / (lastR[0] - prevR[0]);
+    const since = (lastR[c] - firstR[c]) / (lastR[0] - firstR[0]);
     let drop = null;
-    for (let k = 1; k < rows.length; k++) {
-      const change = rows[k][c] - rows[k - 1][c];
-      if (change < -50000) drop = { betweenDays: [rows[k - 1][0], rows[k][0]], cashChange: r0(change) };
+    for (let k = 1; k < have.length; k++) {
+      const change = have[k][c] - have[k - 1][c];
+      if (change < -50000) drop = { betweenDays: [have[k - 1][0], have[k][0]], cashChange: r0(change) };
     }
     return {
-      team: name, ours: name === (snap.settings && snap.settings.team), cashLatest: r0(last[c]),
+      team: name, ours: name === (snap.settings && snap.settings.team), cashLatest: r0(lastR[c]), asOfDay: lastR[0],
       cashChangePerDayLatestInterval: r0(recent), nearestSignatureLatestInterval: recent > 0 ? nearest(recent) : null,
       cashChangePerDaySinceFirstRow: r0(since), largestRecentDrop: drop,
     };
-  }).sort((a, b) => b.cashLatest - a.cashLatest);
+  }).sort((a, b) => (b.cashLatest || 0) - (a.cashLatest || 0));
   out.forEach((t, i) => { t.rank = i + 1; });
   return {
     leaderboardRowDays: rows.map((r) => r[0]), latestRowDay: last[0], daysBehindSnapshot: currentDay - last[0],
@@ -252,7 +256,10 @@ async function ask({ question, briefing, label }) {
       }
     }
     if (done && done.note) note(answer, done.note, done.error);
-    if (done && Number.isFinite(done.remaining)) $('advRemaining').textContent = done.remaining + ' questions left today.';
+    if (done && Number.isFinite(done.remaining)) {
+      $('advRemaining').textContent = done.remaining + ' questions left today'
+        + (Number.isFinite(done.tokensLeft) ? ', ' + done.tokensLeft.toLocaleString('en-US') + ' tokens.' : '.');
+    }
     if (text) {
       history.push({ role: 'user', text: label || question }, { role: 'assistant', text });
       history = history.slice(-6);
@@ -323,7 +330,31 @@ function inline(el, text) {
 }
 
 // ------------------------------------------------------------------ drawer
+// Portfolio version: no live advisor; saved example answers from public/advisor-examples.json.
+async function setupMode() {
+  let cfg = null;
+  try { cfg = await (await fetch('/api/config', { cache: 'no-store' })).json(); } catch (e) { return; }
+  if (cfg && cfg.advisor) {
+    $('advRemaining').textContent = 'Up to ' + cfg.advisor.dailyQuestions + ' questions and '
+      + cfg.advisor.dailyTokens.toLocaleString('en-US') + ' tokens a day.';
+  }
+  if (!cfg || !cfg.portfolio) return;
+  document.body.classList.add('portfolio');
+  $('advIntro').textContent = 'The live advisor was used during the game and is now switched off. These are saved answers it gave, '
+    + 'with the dashboard numbers it was sent. Answers written by Claude (Anthropic).';
+  let examples = [];
+  try { examples = (await (await fetch('advisor-examples.json', { cache: 'no-store' })).json()).examples || []; } catch (e) { /* none */ }
+  if (!examples.length) { $('advLog').textContent = 'No saved examples.'; return; }
+  for (const ex of examples) {
+    addTurn('user', ex.question, ex.snapshotDay);
+    const a = addTurn('assistant', ex.answer, ex.snapshotDay);
+    a.el.querySelector('.turn-head').textContent = 'Advisor · Day ' + ex.snapshotDay + ' data · saved example';
+  }
+  $('advLog').scrollTop = 0;
+}
+
 export function setupAdvisor() {
+  setupMode();
   const drawer = $('advisor');
   const open = (on) => {
     drawer.hidden = !on;

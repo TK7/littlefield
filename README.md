@@ -15,6 +15,9 @@ source of truth; this site shows what the Sheet says, plus the telemetry charts.
 | `apps-script/Code.gs` | Version 2 of the Sheet script: import from Drive, then push to the dashboard |
 | `public/whatif.js` | The what-if section: control deck, charts, final order table |
 | `public/advisor.js` | The advisor drawer: builds the telemetry and briefing data, streams answers |
+| `public/panels.js`, `public/present.js`, `public/story.js` | Competitor tracking, simulator drift, final-order size check; Present mode and its chapter text |
+| `public/sim/calibrate.js` | Replays a download through the model (for the drift panel); port of `sim/littlefield/calibrate.py` |
+| `scripts/curate-advisor.mjs` | Picks saved advisor answers for the portfolio version |
 | `src/api/chat.js`, `src/advisor/prompt.js`, `src/access.js` | The advisor endpoint, its fixed system prompt, and the Cloudflare Access identity check |
 | `public/sim/` | JavaScript port of the event simulation (`model.js`, `snapshot.js`, `analysis.js`), run in a background thread (`worker.js`) |
 | `test/` | Tests, sample snapshots (Days 50, 59 synthetic, 64), Python reference results, and a local preview server |
@@ -25,7 +28,7 @@ source of truth; this site shows what the Sheet says, plus the telemetry charts.
 Requires Node 18 or later.
 
 ```
-npm test          # 27 checks: Worker routes, calculations, the simulator against the Python model, the advisor
+npm test          # 33 checks: Worker routes, extracts, calculations, the simulator against the Python model, the advisor
 npm run preview   # then open http://localhost:8788
 ```
 
@@ -102,6 +105,73 @@ JSON) for the course's AI disclosure.
 
 Locally, `npm run preview` answers with a canned local reply, so the drawer can be tried
 without a key. With `ANTHROPIC_API_KEY` set in the shell it calls Claude and is billed.
+
+## Presenting (final class)
+
+The dashboard can show any download from the Drive folder, and has a **Present** mode that
+walks through the story in four chapters: restart and climb, simulator drift, the final
+order, competitors and result. The chapter text is in `public/story.js`; edit it there.
+
+### Before class (once)
+
+1. **Script.** Replace the Sheet's script with the new `apps-script/Code.gs`, save, and
+   reload the Sheet. The Littlefield menu gains four items.
+2. **Littlefield > Set up the Extracts tab.** One row per download in the folder, with the
+   day read from the file name and the settings in force on that day filled in from the
+   game history. **Check the settings columns**, especially when the order quantity went
+   from 26,700 to 26,100 (between the orders on Days 82 and 113). Edit any cell; the label
+   is what the dashboard shows; set "Push to dashboard" to NO for a file you don't want.
+3. **Competitors tab.** Add the final scoreboard as a Day 268 row (every team, including
+   donothing), and any other leaderboard days you recorded. The chart and the result card
+   use these rows.
+4. **Littlefield > Push all extracts to dashboard.** Each row is loaded with its settings,
+   pushed as a named extract, and the Sheet returns to its final state. If the list is long
+   it stops after about 4.5 minutes; run it again to finish.
+5. The chapters expect these extract names (the Slug column): `day-50`, `day-64`, `day-78`,
+   `day-198`, `day-200`, `final-268`. A chapter whose extract is missing says so on screen.
+
+### On the day
+
+- Open the dashboard and press **Present** (or open `/?present=1`). Arrow keys or
+  PageDown/PageUp move between steps, Escape leaves. A clicker that sends PageDown works.
+- Outside Present mode, the **Data** menu switches between extracts; the address bar keeps
+  the choice (`?extract=day-198`), so a link opens the same view.
+- In the Sheet, **Littlefield > Load an extract...** shows any download with its settings
+  (every tab recalculates); **Back to final state** restores the end of the game. While an
+  extract is on screen the 15-minute import is paused.
+
+### Advisor limits during the presentation
+
+Answers are capped at 1,500 tokens, and the Worker stops answering once 250,000 tokens
+(about $1.50 at Sonnet 5.5 prices) or 60 questions have been used in a UTC day. To change
+them without code: Worker > Settings > Variables and Secrets, add a **Secret** (Secrets
+survive deploys; Text variables do not) named `CHAT_DAILY_TOKENS` for the token budget,
+`CHAT_DAILY_CAP` for questions or `ADVISOR_MAX_TOKENS` for the answer cap. The drawer
+shows what is left.
+
+## After the course: portfolio version (after December 5th)
+
+1. **Keep the record.** In the drawer, export the log as Markdown for the AI disclosure,
+   and save `/api/chatlog?format=json` as `log.json` (it contains your emails; don't commit it).
+2. **Pick examples.** `node scripts/curate-advisor.mjs log.json` lists the answers;
+   `node scripts/curate-advisor.mjs log.json 3 7 12` writes those to
+   `public/advisor-examples.json` without emails or telemetry. Commit that file.
+3. **Switch on portfolio mode.** In `wrangler.jsonc` set `"PORTFOLIO_MODE": "1"` and push.
+   The live advisor, the log export and `/api/ingest` are switched off; the drawer shows the
+   saved examples. The data in KV stays as it is.
+4. **Delete the advisor log from KV** (it holds emails): Workers & Pages > KV > the
+   namespace > search for keys starting `log:` and delete them, or with Wrangler:
+   ```
+   npx wrangler kv key list --binding LF_KV --prefix log: --remote > keys.json
+   npx wrangler kv bulk delete keys.json --binding LF_KV --remote
+   ```
+5. **Remove secrets:** `ANTHROPIC_API_KEY` (then delete the key in the Anthropic Console),
+   and `INGEST_SECRET`, `ACCESS_TEAM_DOMAIN`, `ACCESS_AUD`. In the Sheet, turn off the
+   automatic import.
+6. **Remove Cloudflare Access** (both applications). Do this last: with portfolio mode on,
+   nothing on the site can spend money or change data.
+7. Optional, before making the repository public: `apps-script/Code.gs` contains the Drive
+   folder's id; make sure the folder itself is not shared publicly.
 
 ## Keeping the simulator in step with the Python model
 

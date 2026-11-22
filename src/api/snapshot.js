@@ -1,6 +1,8 @@
 // GET /api/snapshot           -> the latest snapshot
 // GET /api/snapshot?day=57    -> the snapshot stored for simulated Day 57
 // GET /api/snapshot?list=1    -> the simulated days that have a stored snapshot
+// GET /api/snapshot?extracts=1          -> the named extracts pushed from the Sheet
+// GET /api/snapshot?extract=day-198     -> one named extract
 //
 // This route has no secret of its own. It is protected by Cloudflare Access,
 // which must cover the whole site (see README).
@@ -16,6 +18,26 @@ export async function onRequestGet({ request, env }) {
     const days = listed.keys.map((k) => Number(k.name.slice(4))).filter((n) => Number.isFinite(n));
     days.sort((a, b) => a - b);
     return json({ days });
+  }
+
+  if (url.searchParams.get('extracts')) {
+    const extracts = [];
+    let cursor;
+    do {
+      const page = await env.LF_KV.list({ prefix: 'extract:', cursor });
+      for (const k of page.keys) extracts.push(k.metadata || { slug: k.name.slice(8), label: k.name.slice(8) });
+      cursor = page.list_complete === false ? page.cursor : undefined;
+    } while (cursor);
+    extracts.sort((a, b) => (a.day || 0) - (b.day || 0) || String(a.label).localeCompare(String(b.label)));
+    return json({ extracts });
+  }
+
+  const slug = url.searchParams.get('extract');
+  if (slug !== null) {
+    if (!/^[a-z0-9][a-z0-9-]{0,39}$/.test(slug)) return json({ error: 'Unknown extract.' }, 400);
+    const stored = await env.LF_KV.get('extract:' + slug);
+    if (stored === null) return json({ error: 'No extract with that name.' }, 404);
+    return new Response(stored, { headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' } });
   }
 
   const dayParam = url.searchParams.get('day');

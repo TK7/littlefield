@@ -3,13 +3,14 @@
 // (see run_worker_first in wrangler.jsonc).
 import { onRequestPost as ingest } from './api/ingest.js';
 import { onRequestGet as snapshot } from './api/snapshot.js';
-import { onChat, onChatLog } from './api/chat.js';
+import { onChat, onChatLog, onConfig } from './api/chat.js';
 
 const ROUTES = {
   '/api/ingest': { POST: ingest },
   '/api/snapshot': { GET: snapshot },
   '/api/chat': { POST: onChat },
   '/api/chatlog': { GET: onChatLog },
+  '/api/config': { GET: onConfig },
 };
 
 export default {

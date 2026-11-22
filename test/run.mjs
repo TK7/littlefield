@@ -54,6 +54,49 @@ await test('ingest stores latest and a per-day copy; snapshot returns them', asy
   assert.equal((await get(env, '?day=77')).status, 404);
   assert.equal((await get(env, '?day=abc')).status, 400);
 });
+await test('named extracts: stored under their name, listed by day, never replace the live snapshot', async () => {
+  const env = { LF_KV: mockKV(), INGEST_SECRET: SECRET };
+  await post(env, day59);
+  assert.equal((await post(env, { ...day50, extract: { slug: 'day-50', label: 'Day 50: restart', file: 'Day 50.xlsx' } })).status, 200);
+  assert.equal((await post(env, { ...day50, extract: { slug: 'Bad Slug', label: 'x' } })).status, 400);
+  assert.equal((await post(env, { ...day50, extract: { slug: 'ok', label: '' } })).status, 400);
+  assert.equal((await (await get(env)).json()).latestDay, 59);           // live snapshot unchanged
+  const list = (await (await get(env, '?extracts=1')).json()).extracts;
+  assert.deepEqual(list.map((x) => [x.slug, x.label, x.day, x.file]), [['day-50', 'Day 50: restart', 50, 'Day 50.xlsx']]);
+  assert.equal((await (await get(env, '?extract=day-50')).json()).latestDay, 50);
+  assert.equal((await get(env, '?extract=nope')).status, 404);
+  assert.equal((await get(env, '?extract=../x')).status, 400);
+});
+await test('portfolio mode: ingest is read-only', async () => {
+  const env = { LF_KV: mockKV(), INGEST_SECRET: SECRET, PORTFOLIO_MODE: '1' };
+  assert.equal((await post(env, day50)).status, 403);
+  assert.equal(env.LF_KV.store.size, 0);
+});
+
+await test('curate script keeps only question, answer, day and briefing', async () => {
+  const { execFileSync } = await import('node:child_process');
+  const { mkdtempSync, writeFileSync, readFileSync, copyFileSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+  const dir = mkdtempSync(tmpdir() + '/curate-');
+  const log = dir + '/log.json';
+  writeFileSync(log, JSON.stringify({ entries: [
+    { email: 'a@b.edu', question: 'Q1', answer: 'A1', snapshotDay: 64, briefing: null, telemetry: { day: 64 }, model: 'm' },
+    { email: 'c@d.edu', question: 'long text', answer: 'A2', snapshotDay: 198, briefing: 'endgame', telemetry: {}, model: 'm' },
+    { email: 'e@f.edu', question: 'Q3', answer: '', note: 'failed', snapshotDay: 70 },
+  ] }));
+  const target = new URL('../public/advisor-examples.json', import.meta.url);
+  const backup = dir + '/backup.json';
+  copyFileSync(target, backup);
+  try {
+    execFileSync('node', [new URL('../scripts/curate-advisor.mjs', import.meta.url).pathname, log, '2', '1']);
+    const out = JSON.parse(readFileSync(target, 'utf8'));
+    assert.deepEqual(out.examples.map((e) => [e.snapshotDay, e.question, e.answer]), [[198, 'End-game kit order', 'A2'], [64, 'Q1', 'A1']]);
+    assert.doesNotMatch(JSON.stringify(out), /@|telemetry/);
+  } finally {
+    copyFileSync(backup, target);
+  }
+});
+
 await test('snapshot returns 404 before any data arrives', async () => {
   assert.equal((await get({ LF_KV: mockKV() })).status, 404);
 });

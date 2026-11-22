@@ -56,6 +56,13 @@ def main():
     arr = S.replay_arrivals(S.daily(snap), Rng(10001))
     out['runs']['C'] = {'seed': 1, 'arrivals_seed': 10001, 'result': run_out(simulate(S.config(snap), Policy(), StartState(), seed=1, arrivals=arr))}
 
+    # D: history replay of Days 1-78 (machines, contracts, kit orders as they happened).
+    from . import calibrate as C
+    snap = S.load(os.path.join(FIX, 'day78.json'))
+    real, runs = C.replay(snap, S.config(snap), runs=3, seed=1)
+    out['runs']['D'] = {'result': [run_out(r) for r in runs], 'contract3': C.contract_period(real, runs),
+                        'order_rops_day198': C.order_rops(S.daily(S.load(os.path.join(FIX, 'day198.json'))))}
+
     with open(os.path.join(FIX, 'sim-golden.json'), 'w') as f:
         json.dump(out, f, separators=(',', ':'))
     print('wrote', os.path.join(FIX, 'sim-golden.json'))

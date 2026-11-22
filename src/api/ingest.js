@@ -10,6 +10,8 @@ const MAX_BYTES = 2_000_000;
 const RAW_COLUMNS = 24;
 
 export async function onRequestPost({ request, env }) {
+  // The portfolio version is read-only: nothing can replace the game's data.
+  if (env.PORTFOLIO_MODE === '1' || env.PORTFOLIO_MODE === 'true') return json({ error: 'Read-only: this dashboard is in portfolio mode.' }, 403);
   if (!env.LF_KV || !env.INGEST_SECRET) {
     return json({ error: 'Server not configured: LF_KV binding or INGEST_SECRET is missing.' }, 500);
   }
@@ -35,6 +37,15 @@ export async function onRequestPost({ request, env }) {
   snap.receivedAt = new Date().toISOString();
 
   const stored = JSON.stringify(snap);
+
+  // A named extract (pushed from the Sheet's Extracts tab) is kept under its own name and
+  // never replaces the live snapshot, so old files can be pushed at any time.
+  if (snap.extract) {
+    const meta = { slug: snap.extract.slug, label: snap.extract.label, file: snap.extract.file || null, day, receivedAt: snap.receivedAt };
+    await env.LF_KV.put('extract:' + meta.slug, stored, { metadata: meta });
+    return json({ ok: true, extract: meta.slug, day, receivedAt: snap.receivedAt });
+  }
+
   await env.LF_KV.put('latest', stored);
   // One copy per simulated day, so earlier days can be replayed.
   await env.LF_KV.put('day:' + String(day).padStart(3, '0'), stored);
@@ -56,6 +67,12 @@ function validate(snap) {
   }
   if (!snap.settings || typeof snap.settings !== 'object') return 'Snapshot has no settings.';
   if (!Array.isArray(snap.playbook)) return 'Snapshot has no playbook statuses.';
+  if (snap.extract !== undefined) {
+    const x = snap.extract;
+    if (!x || typeof x !== 'object') return 'Extract must be an object.';
+    if (typeof x.slug !== 'string' || !/^[a-z0-9][a-z0-9-]{0,39}$/.test(x.slug)) return 'Extract slug must be 1-40 lowercase letters, digits or dashes.';
+    if (typeof x.label !== 'string' || !x.label.trim() || x.label.length > 80) return 'Extract label must be 1-80 characters.';
+  }
   return null;
 }
 

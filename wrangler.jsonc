@@ -26,6 +26,10 @@
 
   "observability": { "enabled": true },
 
+  // "1" after the course: the live advisor, its log export and ingest are switched off and the
+  // advisor drawer shows saved examples (public/advisor-examples.json). See README.
+  "vars": { "PORTFOLIO_MODE": "0" },
+
  // "vars": {
  //   "ENVIRONMENT": "production"
  // },

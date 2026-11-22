@@ -14,21 +14,45 @@
       <p id="headline" class="muted">Loading the latest snapshot…</p>
     </div>
     <div class="top-actions">
-      <label class="muted" for="daySelect">Snapshot</label>
-      <select id="daySelect" aria-label="Choose which stored day to view"><option value="">Latest</option></select>
+      <label class="muted" for="daySelect">Data</label>
+      <select id="daySelect" aria-label="Choose which extract or stored day to view"><option value="">Latest (live)</option></select>
       <button id="refresh" type="button">Refresh</button>
+      <button id="presentBtn" type="button" class="primary">Present</button>
     </div>
   </header>
+
+  <div id="presentBar" class="present-bar" role="region" aria-label="Presentation">
+    <div class="p-top">
+      <nav id="pMap" class="p-map" aria-label="Chapters"></nav>
+      <div class="p-nav">
+        <button id="pPrev" type="button" aria-label="Previous step">&larr; Back</button>
+        <span id="pCount" class="muted small"></span>
+        <button id="pNext" type="button" class="primary" aria-label="Next step">Next &rarr;</button>
+        <button id="pExit" type="button">Exit</button>
+      </div>
+    </div>
+    <p id="pChapter" class="muted small"></p>
+    <h2 id="pTitle"></h2>
+    <ul id="pBullets" class="p-bullets"></ul>
+  </div>
 
   <main id="app" hidden>
     <p id="control" class="control"></p>
 
-    <section aria-labelledby="h-where">
+    <section id="secResult" data-panel="result" class="result" aria-labelledby="h-result" hidden>
+      <h2 id="h-result">Result</h2>
+      <p class="r-cash"><span class="muted small">Final cash, Day 268</span><br><strong id="rCash"></strong></p>
+      <p id="rRank" class="r-rank"></p>
+      <p id="rProjection"></p>
+      <p id="rNote" class="muted small"></p>
+    </section>
+
+    <section aria-labelledby="h-where" data-panel="tiles">
       <h2 id="h-where">Where we are</h2>
       <div id="tiles" class="tiles"></div>
     </section>
 
-    <section aria-labelledby="h-todo">
+    <section aria-labelledby="h-todo" data-panel="tiles">
       <h2 id="h-todo">What to do now</h2>
       <p class="muted small">Copied word for word from the Playbook tab of the Google Sheet. The Sheet is the source of truth.</p>
       <div class="table-wrap">
@@ -39,9 +63,9 @@
       </div>
     </section>
 
-    <section aria-labelledby="h-wi" class="whatif">
+    <section aria-labelledby="h-wi" class="whatif" data-panel="whatif">
       <h2 id="h-wi">What-if simulator</h2>
-      <p class="muted small">Test settings before using them. The simulator is the team's event model, checked against Days 1-78 of this game. Each line is the median of 200 simulated futures from the latest day. It never changes Littlefield, and the Playbook above stays the source of truth.</p>
+      <p class="muted small">Test settings before using them. The simulator is the team's event model, checked against every download of this game (see Simulator drift). Each line is the median of 200 simulated futures from the latest day. It never changes Littlefield, and the Playbook above stays the source of truth.</p>
       <p id="wiStatus" class="muted small" aria-live="polite">Waiting for data…</p>
       <div id="wiBody" hidden>
         <p id="wiEnded" class="notice" hidden>Control has ended (Day 218). Settings can no longer change; the projection shows how the game runs out.</p>
@@ -72,6 +96,11 @@
         <p id="wiFinalAdvice" class="small"></p>
         <p class="muted small">For the what-if settings. Size = kits for the jobs that can still be finished by Day 268, less kits on hand and on order. An order only goes through when kits on hand are at or below the reorder point, no order is on the way, cash covers it and the quantity is above zero. Green rows are within $5,000 of the best day in the median and $10,000 in the bad case; smaller gaps are simulation noise. Amber rows risk the order firing late: if an order is still on the way, the final order only fires when it arrives, and after Day 218 nobody can set the quantity back to 0, so Littlefield keeps reordering.</p>
         <ol id="wiFinalSteps" class="steps small"></ol>
+        <div class="size-check">
+          <div class="panel-head"><h3 id="h-size">Final order size check</h3><button id="sizeRun" type="button">Check the size</button></div>
+          <p id="sizeStatus" class="muted small" aria-live="polite"></p>
+          <div class="chart-mid"><canvas id="sizeChart" role="img" aria-labelledby="h-size"></canvas></div>
+        </div>
 
         <h3>Utilization against lead time</h3>
         <div class="chart-tall"><canvas id="wiCurve" role="img" aria-label="Simulated lead time against the busiest station's utilization for the what-if machine mix, with the textbook M/M/c line and the contract revenue zones."></canvas></div>
@@ -80,7 +109,27 @@
       </div>
     </section>
 
-    <section aria-labelledby="h-tele" class="viz-root">
+    <section id="secCompetitors" aria-labelledby="h-comp" data-panel="comp">
+      <h2 id="h-comp">Competitor tracking</h2>
+      <p id="compNote" class="muted small"></p>
+      <div class="chart-tall"><canvas id="compChart" role="img" aria-label="Cash by team over the leaderboard days; our team is highlighted. The same numbers are in the table below."></canvas></div>
+      <div class="table-wrap">
+        <table id="compTable"><thead><tr><th scope="col">Rank</th><th scope="col">Team</th><th scope="col" class="num">Cash</th><th scope="col" class="num">Cash change a day (last interval)</th><th scope="col">Closest daily pattern</th><th scope="col">Largest drop (machines or a big kit order)</th></tr></thead><tbody></tbody></table>
+      </div>
+      <p class="muted small">Daily patterns: about $2,300 a day on the $750 contract, $6,200 on $1,000 and $9,300 on $1,250, at about 15 jobs a day. Kit orders and machine purchases make cash jump down, so short intervals mislead.</p>
+    </section>
+
+    <section id="secDrift" aria-labelledby="h-drift" data-panel="drift">
+      <h2 id="h-drift">Simulator drift</h2>
+      <p class="muted small">Each new download was replayed through the model, and the model was recalibrated when the real game moved out of its range. This shows every version of the model against this extract's real days.</p>
+      <p id="driftStatus" class="muted small" aria-live="polite"></p>
+      <div class="table-wrap">
+        <table id="driftTable"><thead><tr><th scope="col">Model version</th><th scope="col">Why it changed</th><th scope="col">Process-time variability</th><th scope="col" class="num">Model revenue per job (10%-90%)</th><th scope="col" class="num">Real</th><th scope="col" class="num">Real is at the model's</th><th scope="col" class="num">Lead time model / real</th></tr></thead><tbody></tbody></table>
+      </div>
+      <div class="chart-tall"><canvas id="driftChart" role="img" aria-label="Revenue per job in 20-day blocks: real game, first model and final model."></canvas></div>
+    </section>
+
+    <section aria-labelledby="h-tele" class="viz-root" data-panel="tele">
       <h2 id="h-tele">Telemetry and stockout audit</h2>
       <p class="muted small">One panel per measure, all on the same day axis. Shaded bands are stockouts (jobs waiting for kits). Dashed lines are purchases and contract changes, inferred from the data.</p>
       <div id="panelToggles" class="toggles" role="group" aria-label="Panels to show"></div>
@@ -120,7 +169,7 @@
       <h2 id="h-adv">Operations advisor</h2>
       <button id="advClose" type="button" aria-label="Close the advisor">Close</button>
     </div>
-    <p class="muted small">Claude explains the numbers this dashboard has computed. It does not calculate figures of its own, and the Playbook decides. <span id="advDay"></span></p>
+    <p class="muted small"><span id="advIntro">Claude explains the numbers this dashboard has computed. It does not calculate figures of its own, and the Playbook decides.</span> <span id="advDay"></span></p>
     <div class="adv-briefings" role="group" aria-label="One-click briefings">
       <button type="button" data-briefing="audit">Audit latest upload</button>
       <button type="button" data-briefing="contract">Contract switch readiness</button>

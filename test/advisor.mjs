@@ -88,7 +88,7 @@ test('advisor: streams the answer, sends a cached system prompt to Sonnet with f
   assert.equal(sent.headers.authorization, 'Bearer sk-test');
   assert.equal(sent.body.model, 'claude-sonnet-5-5');
   assert.equal(sent.body.fallbacks, 'default');
-  assert.equal(sent.body.max_tokens, 4000);
+  assert.equal(sent.body.max_tokens, 1500);
   assert.equal(sent.body.stream, true);
   assert.deepEqual(sent.body.output_config, { effort: 'low' });
   assert.equal(sent.body.system[0].text, SYSTEM_PROMPT);
@@ -193,6 +193,28 @@ test('advisor: competitor forensics from the leaderboard rows', () => {
   assert.equal(us.nearestSignatureLatestInterval, '$1,250 contract');
   assert.deepEqual(us.largestRecentDrop.betweenDays, [50, 55]);     // the restart machine purchases
   assert.equal(c.teams[0].team, 'donothing');                       // most cash on Day 60
+});
+
+test('advisor: daily token budget stops further questions and is reported', async () => {
+  const { call, env, settle } = setup({ CHAT_DAILY_TOKENS: '1000' });
+  let lines = await readNdjson(await call('/api/chat', ask({ question: 'one', telemetry })));
+  await settle();
+  // usage in the stand-in: 900 input + 42 output + 700 cache reads = 1,642 tokens
+  assert.equal(lines.at(-1).tokensLeft, 0);
+  const second = await call('/api/chat', ask({ question: 'two', telemetry }));
+  assert.equal(second.status, 429);
+  assert.match((await second.json()).error, /budget of 1,000 tokens/);
+  assert.equal(env.ANTHROPIC_FETCH.calls.length, 1);
+});
+
+test('advisor: portfolio mode turns off the live advisor and the log; config says so', async () => {
+  const { call, env } = setup({ PORTFOLIO_MODE: '1' });
+  assert.equal((await call('/api/chat', ask({ question: 'hi', telemetry }))).status, 404);
+  assert.equal((await call('/api/chatlog?format=md')).status, 404);
+  assert.equal(env.ANTHROPIC_FETCH.calls.length, 0);
+  assert.deepEqual(await (await call('/api/config', {}, {})).json(), { portfolio: true, advisor: null });
+  const live = await (await setup().call('/api/config', {}, {})).json();
+  assert.deepEqual(live, { portfolio: false, advisor: { live: true, maxTokensPerAnswer: 1500, dailyQuestions: 60, dailyTokens: 250000 } });
 });
 
 if (import.meta.url === 'file://' + process.argv[1]) {

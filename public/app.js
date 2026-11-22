@@ -1,6 +1,8 @@
 import { derive, rollingMean } from './derive.js';
 import { initWhatIf, setupWhatIf, redrawWhatIf } from './whatif.js';
 import { setAdvisorData, setupAdvisor } from './advisor.js';
+import './panels.js';
+import { setupPresent } from './present.js';
 
 const $ = (id) => document.getElementById(id);
 const css = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
@@ -39,32 +41,63 @@ let charts = [];
 let hoverDay = null;
 
 // ---------------------------------------------------------------- loading
-async function load(day) {
+// What to show: '' = the live snapshot, 'd:57' = a stored day, 'x:day-198' = a named extract.
+function query(sel) {
+  if (!sel) return '';
+  if (sel.startsWith('x:')) return '?extract=' + encodeURIComponent(sel.slice(2));
+  if (sel.startsWith('d:')) return '?day=' + encodeURIComponent(sel.slice(2));
+  return '?day=' + encodeURIComponent(sel);
+}
+
+let current = '';
+
+async function load(sel) {
+  current = sel || '';
   $('headline').textContent = 'Loading…';
+  const url = new URL(location.href);
+  url.searchParams.delete('extract'); url.searchParams.delete('day');
+  if (current.startsWith('x:')) url.searchParams.set('extract', current.slice(2));
+  if (current.startsWith('d:')) url.searchParams.set('day', current.slice(2));
+  history.replaceState(null, '', url);
   let res;
   try {
-    res = await fetch('/api/snapshot' + (day ? '?day=' + encodeURIComponent(day) : ''), { cache: 'no-store' });
+    res = await fetch('/api/snapshot' + query(current), { cache: 'no-store' });
   } catch (e) {
     return showEmpty('Could not reach the server. Check your connection and press Refresh.');
   }
   if (res.status === 404) {
-    return showEmpty('The Google Sheet has not sent a snapshot yet. In the Sheet, use the menu Littlefield > Push to dashboard now.');
+    return showEmpty(current.startsWith('x:')
+      ? 'This extract has not been pushed yet. In the Sheet: Littlefield > Push all extracts to dashboard.'
+      : 'The Google Sheet has not sent a snapshot yet. In the Sheet, use the menu Littlefield > Push to dashboard now.');
   }
   if (!res.ok) return showEmpty('The server returned an error (' + res.status + '). Press Refresh to try again.');
   const snap = await res.json();
   render(snap);
 }
 
+export let extractList = [];
+
 async function loadDayList() {
   try {
-    const res = await fetch('/api/snapshot?list=1', { cache: 'no-store' });
-    if (!res.ok) return;
-    const { days } = await res.json();
+    const [a, b] = await Promise.all([
+      fetch('/api/snapshot?extracts=1', { cache: 'no-store' }).then((r) => (r.ok ? r.json() : { extracts: [] })),
+      fetch('/api/snapshot?list=1', { cache: 'no-store' }).then((r) => (r.ok ? r.json() : { days: [] })),
+    ]);
+    extractList = a.extracts || [];
     const sel = $('daySelect');
-    const keep = sel.value;
-    sel.length = 1;
-    days.slice().reverse().forEach((d) => sel.add(new Option('Day ' + d, String(d))));
-    sel.value = keep;
+    sel.replaceChildren(new Option('Latest (live)', ''));
+    if (extractList.length) {
+      const g = document.createElement('optgroup'); g.label = 'Extracts';
+      extractList.forEach((x) => g.append(new Option(x.label, 'x:' + x.slug)));
+      sel.append(g);
+    }
+    if ((b.days || []).length) {
+      const g = document.createElement('optgroup'); g.label = 'Days pushed during the game';
+      b.days.slice().reverse().forEach((d) => g.append(new Option('Day ' + d, 'd:' + d)));
+      sel.append(g);
+    }
+    sel.value = current;
+    document.dispatchEvent(new CustomEvent('lf:extracts', { detail: extractList }));
   } catch (e) { /* the list is a convenience; the page works without it */ }
 }
 
@@ -119,6 +152,8 @@ function render(snap) {
   renderAudit();
   initWhatIf(snap, model);
   setAdvisorData(snap, model);
+  $('daySelect').value = current;
+  document.dispatchEvent(new CustomEvent('lf:rendered', { detail: { snap, model, selection: current } }));
 }
 
 // Same rule as the Sheet's colour coding: the first word of the status decides.
@@ -320,10 +355,16 @@ function row(values, numeric = false, firstText = 0) {
 }
 
 // ---------------------------------------------------------------- start
-$('refresh').addEventListener('click', () => { load($('daySelect').value); loadDayList(); });
+$('refresh').addEventListener('click', () => { load(current); loadDayList(); });
+// Other modules (the presentation) ask for a snapshot by dispatching lf:select.
+document.addEventListener('lf:select', (e) => { if (e.detail !== current || !model) load(e.detail); });
 $('daySelect').addEventListener('change', () => load($('daySelect').value));
 window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { if (model) { renderPanels(); redrawWhatIf(); } });
 setupWhatIf();
 setupAdvisor();
-load('');
+setupPresent();
+{
+  const p = new URLSearchParams(location.search);
+  load(p.get('extract') ? 'x:' + p.get('extract') : p.get('day') ? 'd:' + p.get('day') : '');
+}
 loadDayList();

@@ -112,7 +112,8 @@
     <section id="secCompetitors" aria-labelledby="h-comp" data-panel="comp">
       <h2 id="h-comp">Competitor tracking</h2>
       <p id="compNote" class="muted small"></p>
-      <div class="chart-tall"><canvas id="compChart" role="img" aria-label="Cash by team over the leaderboard days; our team is highlighted. The same numbers are in the table below."></canvas></div>
+      <div id="compLegend" class="legend comp-legend" aria-live="polite"></div>
+      <div class="chart-tall"><canvas id="compChart" role="img" aria-label="Cash by team over the leaderboard days; our team in green, teams picked in the table in blue. The same numbers are in the table below."></canvas></div>
       <div class="table-wrap">
         <table id="compTable"><thead><tr><th scope="col">Rank</th><th scope="col">Team</th><th scope="col" class="num">Cash</th><th scope="col" class="num">Cash change a day (last interval)</th><th scope="col">Closest daily pattern</th><th scope="col">Largest drop (machines or a big kit order)</th></tr></thead><tbody></tbody></table>
       </div>

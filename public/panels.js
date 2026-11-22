@@ -13,6 +13,7 @@ const ordinal = (n) => n + (n % 100 >= 11 && n % 100 <= 13 ? 'th' : ['th', 'st',
 const cell = (tr, text, num) => { const td = document.createElement('td'); td.textContent = text; if (num) td.className = 'num'; tr.append(td); };
 
 let charts = { comp: null, drift: null, size: null };
+const picked = new Set();   // competitor teams highlighted in blue; kept when the extract changes
 let shown = null;   // { snap, model }
 let driftGen = 0;
 
@@ -27,12 +28,13 @@ function drawCompetitors(snap) {
     ? 'Leaderboard cash typed into the Sheet\'s Competitors tab on Days ' + rows.map((r) => r[0]).join(', ')
       + '. The Littlefield download has only our own cash, so these rows are as fresh as the last one entered.'
     : 'No leaderboard rows in the Competitors tab yet.';
-  const muted = css('--text-muted'), grid = css('--grid'), ink = css('--text-primary'), us = css('--series-b');
+  const muted = css('--text-muted'), grid = css('--grid'), us = css('--series-b'), them = css('--series-1');
+  const colour = (name) => (name === ours ? us : picked.has(name) ? them : muted);
   const ds = teams.map((name, i) => {
     const pts = rows.filter((r) => r[i + 1] > 0).map((r) => ({ x: r[0], y: r[i + 1] }));
-    const mine = name === ours;
-    return { label: name, data: pts, borderColor: mine ? us : muted, backgroundColor: mine ? us : muted,
-      borderWidth: mine ? 3 : 1.25, pointRadius: mine ? 3 : 1.5, tension: 0, order: mine ? 0 : 1 };
+    const mine = name === ours, sel = picked.has(name);
+    return { label: name, data: pts, borderColor: colour(name), backgroundColor: colour(name),
+      borderWidth: mine ? 3 : sel ? 2.5 : 1.25, pointRadius: mine || sel ? 3 : 1.5, tension: 0, order: mine ? 0 : sel ? 1 : 2 };
   });
   if (charts.comp) charts.comp.destroy();
   charts.comp = new Chart($('compChart'), {
@@ -51,15 +53,25 @@ function drawCompetitors(snap) {
     plugins: [{
       id: 'endLabels',
       afterDatasetsDraw(chart) {
-        const { ctx } = chart;
-        ctx.save(); ctx.font = '11px system-ui, sans-serif'; ctx.textBaseline = 'middle';
+        // Labels at the end of the highlighted lines, nudged apart so close finishes stay readable.
+        const { ctx, chartArea: area } = chart;
+        const labels = [];
         chart.data.datasets.forEach((d, i) => {
           const meta = chart.getDatasetMeta(i);
           const p = meta.data[meta.data.length - 1];
-          if (!p || d.label !== ours) return;
-          ctx.fillStyle = ink; ctx.textAlign = 'right';
-          ctx.fillText(d.label, p.x - 8, p.y - 10);
+          if (p && (d.label === ours || picked.has(d.label))) labels.push({ x: p.x, y: p.y - 10, text: d.label, color: colour(d.label) });
         });
+        labels.sort((a, b) => a.y - b.y);
+        for (let k = 1; k < labels.length; k++) labels[k].y = Math.max(labels[k].y, labels[k - 1].y + 13);
+        const overflow = labels.length ? labels[labels.length - 1].y - (area.bottom - 6) : 0;
+        if (overflow > 0) labels.forEach((l) => { l.y -= overflow; });
+        ctx.save(); ctx.font = '600 11.5px system-ui, sans-serif'; ctx.textBaseline = 'middle'; ctx.textAlign = 'right';
+        ctx.lineJoin = 'round'; ctx.lineWidth = 4; ctx.strokeStyle = css('--surface-1');
+        for (const l of labels) {
+          const y = Math.max(area.top + 6, l.y);
+          ctx.strokeText(l.text, l.x - 8, y);   // halo so the label reads over the lines
+          ctx.fillStyle = l.color; ctx.fillText(l.text, l.x - 8, y);
+        }
         ctx.restore();
       },
     }],
@@ -70,17 +82,52 @@ function drawCompetitors(snap) {
     const tr = document.createElement('tr'); cell(tr, data.note || 'Not enough leaderboard rows.'); tr.firstChild.colSpan = 6; body.replaceChildren(tr);
     return;
   }
+  const toggle = (team) => {
+    if (picked.has(team)) picked.delete(team); else picked.add(team);
+    drawCompetitors(snap);
+  };
   body.replaceChildren(...data.teams.map((t) => {
     const tr = document.createElement('tr');
     if (t.ours) tr.className = 'ours-row';
+    else {
+      tr.className = 'pickable' + (picked.has(t.team) ? ' picked-row' : '');
+      tr.addEventListener('click', (e) => { if (!e.target.closest('button')) toggle(t.team); });
+    }
     cell(tr, t.cashLatest ? String(t.rank) : '—');
-    cell(tr, t.team);
+    if (t.ours) cell(tr, t.team);
+    else {
+      const td = document.createElement('td');
+      const b = document.createElement('button');
+      b.type = 'button'; b.className = 'team-pick'; b.textContent = t.team;
+      b.setAttribute('aria-pressed', String(picked.has(t.team)));
+      b.title = picked.has(t.team) ? 'Remove the highlight' : 'Highlight on the chart';
+      b.addEventListener('click', () => toggle(t.team));
+      td.append(b); tr.append(td);
+    }
     cell(tr, t.cashLatest ? usd(t.cashLatest) + (t.asOfDay && t.asOfDay !== data.latestRowDay ? ' (Day ' + t.asOfDay + ')' : '') : 'not entered', true);
     cell(tr, t.missing ? '—' : signed(t.cashChangePerDayLatestInterval), true);
     cell(tr, t.nearestSignatureLatestInterval || '—');
     cell(tr, t.largestRecentDrop ? usd(t.largestRecentDrop.cashChange) + ', Days ' + t.largestRecentDrop.betweenDays.join('-') : '—');
     return tr;
   }));
+  // Legend and how to use it.
+  const shownPicks = [...picked].filter((n) => teams.includes(n));
+  const key = (label, color) => { const k = document.createElement('span'); k.className = 'key';
+    const sw = document.createElement('span'); sw.className = 'swatch'; sw.style.background = color; k.append(sw, document.createTextNode(label)); return k; };
+  const items = [key(ours, us)];
+  if (shownPicks.length) items.push(key(shownPicks.join(', '), them));
+  items.push(key('Other teams', muted));
+  const hint = document.createElement('span');
+  hint.className = 'muted';
+  hint.textContent = shownPicks.length ? '' : 'Click a team in the table to highlight it.';
+  items.push(hint);
+  if (shownPicks.length) {
+    const clear = document.createElement('button');
+    clear.type = 'button'; clear.className = 'link-button'; clear.textContent = 'Clear highlights';
+    clear.addEventListener('click', () => { picked.clear(); drawCompetitors(snap); });
+    items.push(clear);
+  }
+  $('compLegend').replaceChildren(...items);
 }
 
 // ------------------------------------------------------------------ simulator drift

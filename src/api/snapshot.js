@@ -5,7 +5,7 @@
 // GET /api/snapshot?extract=day-198     -> one named extract
 //
 // This route has no secret of its own. It is protected by Cloudflare Access,
-// which must cover the whole site (see README).
+// which must cover the whole site (see docs/OPERATIONS.md).
 // The Worker's workers.dev and preview URLs are switched off in wrangler.jsonc so
 // there is no address that skips Access.
 

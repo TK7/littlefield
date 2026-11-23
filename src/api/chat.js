@@ -10,7 +10,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { SYSTEM_PROMPT, BRIEFINGS } from '../advisor/prompt.js';
 import { identify } from '../access.js';
 
-const MODEL = 'claude-sonnet-5-5';      // the team chose Sonnet; see README
+const MODEL = 'claude-sonnet-5-5';      // the team chose Sonnet; see docs/OPERATIONS.md
 const MAX_TOKENS = 1500;                // cost cap per answer (thinking counts towards it)
 const DAILY_CAP = 60;                   // questions per UTC day, for the whole team
 const DAILY_TOKENS = 250_000;           // tokens per UTC day (input, cache and output), about $1.50

@@ -1,203 +1,151 @@
-# Littlefield Simulation 2 dashboard (A Team)
+# Littlefield Simulation 2: operations dashboard
 
-Read-only dashboard for the team's Littlefield factory. The Google Sheet stays the
-source of truth; this site shows what the Sheet says, plus the telemetry charts.
+A decision-support dashboard built by the **A Team** for Littlefield, the factory
+simulation used in MBA operations courses. It turned the game's daily downloads into a
+live view of the factory, tested decisions in a calibrated simulation before they were
+made, and explained the numbers through an AI advisor.
 
-## What is in here
+**Result: first place of 11 teams, with $2,703,403 in final cash**, $9,719 ahead of
+second. The final figure landed inside the range the simulator projected on Day 200
+(median $2,696,034, within 0.3%).
 
-| Path | Purpose |
+![Present mode: the closing result card](docs/images/present-result.png)
+
+## The problem
+
+Each team runs a small electronics factory for 268 simulated days, one day per real
+hour, and is judged on its cash at the end. Orders arrive at random, every job passes
+through three stations (one of them twice), kits take four days to arrive, and the
+contract you choose pays $750, $1,000 or $1,250 a job depending on how fast the job is
+finished. On Day 218 the controls lock and the factory runs on its last settings.
+
+We took over on Day 50 with an overloaded factory: three stations at or near full
+load, 68 jobs in progress, lead times over four days and repeated kit stockouts.
+
+## What the system did
+
+| Decision | How the dashboard supported it | What happened |
+|---|---|---|
+| Restart on Day 51 | Cash projections to Day 268 for each machine mix and contract, as medians of 200 simulated futures with 10-90% bands | Bought to 3/4/3, raised kit orders from 7,200 to 26,700, moved from $750 to $1,000 (Day 56) and $1,250 (Day 61) as lead times fell under half a day |
+| Keep the model honest | Each new download replayed through the model; recalibrated four times when the real game left the model's range | The final model matched the real revenue per job over Days 61-268 ($1,140 against $1,139) |
+| Final kit order | A simulator sweep of the order day and size, and a check of when Littlefield's automatic reorder would fire | 896 batches (53,760 kits) placed on Day 200.37; no stockout afterwards, and 380 kits (about $3,800) left over at the end |
+| Competitors | Leaderboard cash over time, cash-per-day patterns that reveal each team's contract, purchase detection | Tracked through the game |
+
+![Cash projections from Day 50](docs/images/cash-projections-day50.png)
+
+*From the Day 50 data: doing nothing against the two restart plans. Each line is the
+median of 200 simulated futures.*
+
+## How it works
+
+```mermaid
+flowchart LR
+    LF[Littlefield download] --> DR[Google Drive folder]
+    DR --> GS["Google Sheet<br/>(Apps Script: import, Playbook, settings per extract)"]
+    GS -- "signed push" --> W["Cloudflare Worker<br/>/api/ingest, /api/snapshot"]
+    W --> KV[(Workers KV<br/>snapshots and extracts)]
+    B["Browser<br/>dashboard, charts, Present mode"] --> W
+    B --> SIM["Web Worker<br/>event simulation"]
+    B -- "question + computed telemetry" --> W
+    W -- "cached system prompt" --> C[Claude API]
+```
+
+- **Google Sheet as the source of truth.** An Apps Script imports each download from a
+  Drive folder, computes the team's Playbook (reorder point, machines, contract, final
+  order), and pushes a signed JSON snapshot to the Worker. An Extracts tab keeps every
+  download with the settings that were in force on its day, so any point in the game can
+  be shown again.
+- **Event simulation, twice.** A discrete-event model of the factory (Poisson orders,
+  four-step routing, the three Station 2 scheduling rules, the four Littlefield
+  conditions for a kit order, contract pricing, interest, the Day 218 lock) is written in
+  Python as the reference and ported line by line to JavaScript for the browser. Both use
+  the same seeded random number generator, and the tests check that every simulated day
+  matches between them.
+- **Calibration against the real game.** Process times are measured from utilization;
+  their variability is fitted by replaying the real daily orders, machine purchases and
+  kit orders through the model. The drift panel shows every version of the model against
+  the real days.
+- **An advisor that explains, not calculates.** The browser computes every figure and
+  sends it with the question. The Worker adds a fixed, cached system prompt and calls
+  Claude, which is told to quote only those figures and to defer to the Playbook. Answers
+  stream into a drawer; a daily token budget caps the cost, and every question and answer
+  was logged for the course's AI-use disclosure.
+- **Present mode** walks through the story in four chapters (restart, simulator drift,
+  final order, competitors and result), loading the right extract for each step.
+
+![Simulator drift: each model version against the real game](docs/images/simulator-drift.png)
+
+![Final order size check](docs/images/final-order-size.png)
+
+## Engineering notes
+
+- No framework and no build step for the site: plain ES modules and Chart.js, a strict
+  Content Security Policy, and the simulation in a Web Worker so 200-run projections
+  (about 1.5 seconds) never block the page.
+- Security: Cloudflare Access in front of the whole site, with the Worker also verifying
+  the Access token on the advisor; the ingest route takes a shared secret compared in
+  constant time; secrets live only in Cloudflare; a portfolio mode makes the deployment
+  read-only and replaces the live advisor with saved answers.
+- Tests: 33 in Node (Worker routes, extract storage, calculations, the JavaScript
+  simulator against the Python reference, the advisor with the Claude API replaced by a
+  local stand-in) and 35 in Python (factory rules, the four kit-order conditions,
+  calibration against Days 1-50, 61-78 and 61-198, the final-order sizing).
+
+| Layer | Technology |
 |---|---|
-| `public/` | The site: `index.html`, `app.js`, `derive.js`, `styles.css`, `_headers` (security headers), and Chart.js 4.4.7 in `vendor/` |
-| `src/worker.js` | Worker entry: sends `/api/*` to the two handlers, everything else to the static files |
-| `src/api/ingest.js` | Receives a snapshot from the Sheet (shared secret), stores it in KV |
-| `src/api/snapshot.js` | Returns the latest snapshot, a stored day, or the list of stored days |
-| `wrangler.jsonc` | Worker settings: name, custom domain, KV binding, static assets |
-| `apps-script/Code.gs` | Version 2 of the Sheet script: import from Drive, then push to the dashboard |
-| `public/whatif.js` | The what-if section: control deck, charts, final order table |
-| `public/advisor.js` | The advisor drawer: builds the telemetry and briefing data, streams answers |
-| `public/panels.js`, `public/present.js`, `public/story.js` | Competitor tracking, simulator drift, final-order size check; Present mode and its chapter text |
-| `public/sim/calibrate.js` | Replays a download through the model (for the drift panel); port of `sim/littlefield/calibrate.py` |
-| `scripts/curate-advisor.mjs` | Picks saved advisor answers for the portfolio version |
-| `src/api/chat.js`, `src/advisor/prompt.js`, `src/access.js` | The advisor endpoint, its fixed system prompt, and the Cloudflare Access identity check |
-| `public/sim/` | JavaScript port of the event simulation (`model.js`, `snapshot.js`, `analysis.js`), run in a background thread (`worker.js`) |
-| `test/` | Tests, sample snapshots (Days 50, 59 synthetic, 64), Python reference results, and a local preview server |
-| `sim/` | Python event simulation: the reference model for the Phase 2 what-if simulator (see `sim/README.md`) |
+| Hosting | Cloudflare Workers with static assets, Workers KV, Cloudflare Access |
+| Data pipeline | Google Drive, Google Sheets, Google Apps Script |
+| Front end | HTML, CSS and JavaScript modules, Chart.js 4.4.7, Web Workers |
+| Simulation | Python 3 (standard library only) and a JavaScript port |
+| Advisor | Claude Sonnet 5.5 through the Anthropic TypeScript SDK, streaming, prompt caching |
 
-## Try it on your own computer first (no accounts needed)
+## Run it locally
 
-Requires Node 18 or later.
+Node 18 or later. No accounts are needed: the preview server loads the game's
+downloads from `test/fixtures/` and answers advisor questions with a canned reply.
 
-```
-npm test          # 33 checks: Worker routes, extracts, calculations, the simulator against the Python model, the advisor
-npm run preview   # then open http://localhost:8788
+```bash
+npm install
+npm test
+npm run preview          # http://localhost:8788, then press Present
 ```
 
-The preview loads the real Day 50 data. `node test/serve.mjs test/fixtures/day59-synthetic.json`
-loads a made-up later day with machine purchases, a kit order and contract switches.
+The Python model:
 
-## Deploy (Cloudflare Worker at littlefield.jay.systems)
+```bash
+cd sim && python3 -m unittest discover -s tests
+python3 -m littlefield validate ../test/fixtures/day198.json
+```
 
-The site runs as one Cloudflare Worker with static assets, built by Workers Builds
-from this GitHub repository. `wrangler.jsonc` holds every setting except the secret.
+Deployment, the Sheet setup and the presentation workflow are in
+[docs/OPERATIONS.md](docs/OPERATIONS.md); the model and its calibration in
+[sim/README.md](sim/README.md).
 
-1. **Worker name.** The `name` in `wrangler.jsonc` (`littlefield`) must match the Worker's
-   name in the Cloudflare dashboard. If yours is called something else, change it there.
-2. **Build settings.** Worker > Settings > Build: repository `TK7/littlefield`, production
-   branch `main`, build command empty, deploy command `npx wrangler deploy`, root directory `/`.
-3. **KV.** Nothing to do: the first deploy creates the namespace and binds it as `LF_KV`.
-   If you already made one by hand, put its id in `wrangler.jsonc` (`"id": "..."`) instead.
-4. **Secret.** Make a long random string (30+ characters). Worker > Settings >
-   Variables and Secrets > add a **Secret** named exactly `INGEST_SECRET`. Secrets survive
-   later deploys. Without it, `/api/ingest` answers 500.
-5. **Domain.** The deploy attaches `littlefield.jay.systems` as a custom domain. The
-   `workers.dev` address and preview URLs are switched off, so the domain is the only way in.
-6. **Access.** Zero Trust > Access > Applications > add a self-hosted application for
-   `littlefield.jay.systems`, with an Allow policy listing the three team email addresses.
-   Then add a second application for `littlefield.jay.systems/api/ingest` with a
-   Bypass policy for Everyone. That path is protected by `INGEST_SECRET` instead,
-   because the Google Sheet cannot sign in by email.
-7. **Sheet.** In the Google Sheet: Extensions > Apps Script. Replace the whole script
-   with `apps-script/Code.gs` and save. Reload the Sheet, then
-   Littlefield > Set dashboard connection (paste `https://littlefield.jay.systems` and the
-   secret), then Littlefield > Push to dashboard now.
-8. Open `https://littlefield.jay.systems`. It should ask for your email, then show Day 50.
+## Repository
 
-To deploy by hand instead: `npm install`, `npx wrangler login`, `npm run deploy`.
-
-### Checks after deploying
-
-- Signed out, the address must show the Cloudflare sign-in, not the dashboard.
-- `https://littlefield.jay.systems/api/snapshot` in a private window must also ask for sign-in.
-- A wrong secret must fail: the Sheet shows "the dashboard answered 401".
-- If the Sheet shows "answered 302" or "403", the Bypass rule for `api/ingest` is not in effect.
-
-## The advisor (Phase 3)
-
-A button at the bottom right opens the drawer. Four one-click briefings (audit the latest
-upload, contract switch readiness, competitor cash forensics, end-game kit order) and free
-questions. The browser computes every number and sends it as telemetry (about 3-6 KB); the
-Worker adds a fixed system prompt and calls Claude, which explains the numbers and is told
-not to calculate any of its own. Answers stream into the drawer and show the snapshot day.
-
-Set up once:
-
-1. In the Anthropic Console, create an API key and set a spending limit ($50).
-2. Worker > Settings > Variables and Secrets > Add, type **Secret**, name `ANTHROPIC_API_KEY`.
-3. Optional but recommended: add two more Secrets so the Worker checks the Access token
-   itself, not just the email header: `ACCESS_TEAM_DOMAIN` (for example
-   `yourteam.cloudflareaccess.com`, from Zero Trust > Settings) and `ACCESS_AUD` (the
-   Application Audience (AUD) tag of the dashboard's Access application).
-4. Check the Access Bypass rule covers only `api/ingest`. `/api/chat` and `/api/chatlog`
-   must stay behind sign-in.
-
-| Setting | Value |
+| Path | Contents |
 |---|---|
-| Model | `claude-sonnet-5-5` (Sonnet, as the team decided), effort `low` |
-| Answer cap | 4,000 tokens (thinking included); the prompt asks for about 200 words |
-| Daily cap | 60 questions a day for the whole team (`CHAT_DAILY_CAP` to change) |
-| Refusals | Server-side fallback (`fallbacks: "default"`): if a safety classifier declines, the API retries on its recommended model in the same call |
-| Prompt caching | The system prompt is identical on every call and cached; the telemetry is not |
-| Cost | Roughly $0.01 a question at Sonnet 5.5 prices ($2 / $10 per million tokens) |
+| `public/` | The dashboard: telemetry, what-if simulator, advisor drawer, panels, Present mode (`story.js` holds its text) |
+| `public/sim/` | JavaScript event simulation, replay and analyses, run in a Web Worker |
+| `src/` | Cloudflare Worker: ingest, snapshots and extracts, advisor endpoint, Access verification |
+| `apps-script/` | The Google Sheet's script |
+| `sim/` | Python reference model, calibration and command-line tools |
+| `test/` | Node tests, game downloads as fixtures, Python reference results, local preview server |
+| `docs/` | Operating guide and screenshots |
 
-Every question and answer is stored in KV with the time, who asked (from Cloudflare
-Access), the snapshot day and the telemetry sent. Export it from the drawer (Markdown or
-JSON) for the course's AI disclosure.
+## How it was built
 
-Locally, `npm run preview` answers with a canned local reply, so the drawer can be tried
-without a key. With `ANTHROPIC_API_KEY` set in the shell it calls Claude and is billed.
+The A Team designed the approach, ran the factory, and made every decision in the game.
+The code (dashboard, Worker, Apps Script, Python model and tests) was written by Claude
+(Anthropic) in Claude Code and Cowork sessions, directed and reviewed by the team. The
+advisor's answers during the game were written by Claude Sonnet from the dashboard's
+numbers, and disclosed to the course with the full log.
 
-## Presenting (final class)
+Littlefield is a product of Responsive Learning Technologies; this project is not
+affiliated with it. The game data in `test/fixtures/` comes from our own team's
+downloads.
 
-The dashboard can show any download from the Drive folder, and has a **Present** mode that
-walks through the story in four chapters: restart and climb, simulator drift, the final
-order, competitors and result. The chapter text is in `public/story.js`; edit it there.
+## License
 
-### Before class (once)
-
-1. **Script.** Replace the Sheet's script with the new `apps-script/Code.gs`, save, and
-   reload the Sheet. The Littlefield menu gains four items.
-2. **Littlefield > Set up the Extracts tab.** One row per download in the folder, with the
-   day read from the file name and the settings in force on that day filled in from the
-   game history. **Check the settings columns**, especially when the order quantity went
-   from 26,700 to 26,100 (between the orders on Days 82 and 113). Edit any cell; the label
-   is what the dashboard shows; set "Push to dashboard" to NO for a file you don't want.
-3. **Competitors tab.** Add the final scoreboard as a Day 268 row (every team, including
-   donothing), and any other leaderboard days you recorded. The chart and the result card
-   use these rows.
-4. **Littlefield > Push all extracts to dashboard.** Each row is loaded with its settings,
-   pushed as a named extract, and the Sheet returns to its final state. If the list is long
-   it stops after about 4.5 minutes; run it again to finish.
-5. The chapters expect these extract names (the Slug column): `day-50`, `day-64`, `day-78`,
-   `day-198`, `day-200`, `final-268`. A chapter whose extract is missing says so on screen.
-
-### On the day
-
-- Open the dashboard and press **Present** (or open `/?present=1`). Arrow keys or
-  PageDown/PageUp move between steps, Escape leaves. A clicker that sends PageDown works.
-- Outside Present mode, the **Data** menu switches between extracts; the address bar keeps
-  the choice (`?extract=day-198`), so a link opens the same view.
-- In the Sheet, **Littlefield > Load an extract...** shows any download with its settings
-  (every tab recalculates); **Back to final state** restores the end of the game. While an
-  extract is on screen the 15-minute import is paused.
-
-### Advisor limits during the presentation
-
-Answers are capped at 1,500 tokens, and the Worker stops answering once 250,000 tokens
-(about $1.50 at Sonnet 5.5 prices) or 60 questions have been used in a UTC day. To change
-them without code: Worker > Settings > Variables and Secrets, add a **Secret** (Secrets
-survive deploys; Text variables do not) named `CHAT_DAILY_TOKENS` for the token budget,
-`CHAT_DAILY_CAP` for questions or `ADVISOR_MAX_TOKENS` for the answer cap. The drawer
-shows what is left.
-
-## After the course: portfolio version (after December 5th)
-
-1. **Keep the record.** In the drawer, export the log as Markdown for the AI disclosure,
-   and save `/api/chatlog?format=json` as `log.json` (it contains your emails; don't commit it).
-2. **Pick examples.** `node scripts/curate-advisor.mjs log.json` lists the answers;
-   `node scripts/curate-advisor.mjs log.json 3 7 12` writes those to
-   `public/advisor-examples.json` without emails or telemetry. Commit that file.
-3. **Switch on portfolio mode.** In `wrangler.jsonc` set `"PORTFOLIO_MODE": "1"` and push.
-   The live advisor, the log export and `/api/ingest` are switched off; the drawer shows the
-   saved examples. The data in KV stays as it is.
-4. **Delete the advisor log from KV** (it holds emails): Workers & Pages > KV > the
-   namespace > search for keys starting `log:` and delete them, or with Wrangler:
-   ```
-   npx wrangler kv key list --binding LF_KV --prefix log: --remote > keys.json
-   npx wrangler kv bulk delete keys.json --binding LF_KV --remote
-   ```
-5. **Remove secrets:** `ANTHROPIC_API_KEY` (then delete the key in the Anthropic Console),
-   and `INGEST_SECRET`, `ACCESS_TEAM_DOMAIN`, `ACCESS_AUD`. In the Sheet, turn off the
-   automatic import.
-6. **Remove Cloudflare Access** (both applications). Do this last: with portfolio mode on,
-   nothing on the site can spend money or change data.
-7. Optional, before making the repository public: `apps-script/Code.gs` contains the Drive
-   folder's id; make sure the folder itself is not shared publicly.
-
-## Keeping the simulator in step with the Python model
-
-`public/sim/model.js` is a line-by-line port of `sim/littlefield/model.py`. They share a
-random number generator, so the same seed gives the same run. After changing either model:
-
-```
-cd sim && python3 -m unittest discover -s tests && python3 -m littlefield.golden
-cd .. && npm test
-```
-
-`npm test` fails if any simulated day differs from the Python results.
-
-## How updates flow
-
-1. Someone drops a Littlefield download in the Drive source folder.
-2. Within 15 minutes the Sheet imports it and pushes a snapshot here.
-3. The Sheet also pushes when a yellow Settings cell changes, at the next 15-minute run.
-4. Press Refresh on the dashboard. The "Snapshot" menu replays any earlier stored day.
-
-## Notes
-
-- Nothing secret is in this repository. The secret lives in Cloudflare and in the
-  Sheet's document properties. If it leaks, change it in both places.
-- The kit stock figures are estimates inferred from cash movements, as in the Sheet.
-- KV is eventually consistent: a push can take up to about a minute to show after Refresh.
-- AI disclosure: this code was written by Claude (Anthropic) in Cowork and Claude Code
-  sessions, directed and reviewed by the team. The advisor's answers are written by Claude
-  at the time of asking; the exported log records each one.
+[MIT](LICENSE). Chart.js, included in `public/vendor/`, is also MIT-licensed and keeps
+its own notice.

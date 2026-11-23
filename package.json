@@ -1,6 +1,8 @@
 {
   "name": "littlefield-sim2-dashboard",
   "private": true,
+  "description": "Decision-support dashboard for the Littlefield operations simulation: data sync, calibrated event simulation, AI advisor, presentation mode.",
+  "license": "MIT",
   "type": "module",
   "scripts": {
     "test": "node test/run.mjs",

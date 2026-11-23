@@ -34,7 +34,7 @@ export const CHAPTERS = [
         extract: 'day-50', show: ['whatif'],
         bullets: [
           'Buy to 3 / 4 / 3, raise the reorder point to 6,000 and the order quantity to 26,700, prioritise step 4 at Station 2.',
-          'Step up the contract only when lead times allow: $750, then $1,000, then $1,250.',
+          'Step up the contract only when median lead times allow for change: $750, then $1,000, then $1,250.',
           'Each line is the median of 200 simulated futures, with a 10-90% band.',
         ],
       },
@@ -42,7 +42,7 @@ export const CHAPTERS = [
         title: 'Days 51-64: the climb',
         extract: 'day-64', show: ['tiles', 'tele'],
         bullets: [
-          'Day 51: three machines bought. Day 52: a 26,700-kit order, the last stockout.',
+          'Day 51: three machines bought to 3/4/3. Day 52: a 26,700-kit order, the last stockout.',
           'Contract 2 from Day 56, Contract 3 ($1,250) from Day 61, as the backlog cleared.',
           'Lead time fell from over 4 days to under half a day.',
         ],
@@ -58,7 +58,7 @@ export const CHAPTERS = [
         bullets: [
           'Each new download was replayed through the model with the real daily orders.',
           'The average lead time matched, but revenue per job ran about $43 low: too many simulated jobs missed the half-day promise.',
-          'Station 2 variability cut from 0.75 to 0.25. Lot splitting was checked and ruled out: one lot of 60 kits per job.',
+          'Refitting the simulated model allowed for more accurate planning for endgame moves',
         ],
       },
       {

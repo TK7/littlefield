@@ -80,9 +80,9 @@ flowchart LR
 ## Engineering notes
 
 - No framework and no build step for the site: plain ES modules and Chart.js, a strict
-  Content Security Policy, and the simulation in a Web Worker so 200-run projections
-  (about 1.5 seconds) never block the page.
-- Security: Cloudflare Access in front of the whole site, with the Worker also verifying
+  Content Security Policy, and the simulation runs in a Web Worker so 200-run projections
+  (about 1.5 seconds) do not block the page.
+- Security: During the simulation, the team had Cloudflare Access in front of the whole site, with the Worker also verifying
   the Access token on the advisor; the ingest route takes a shared secret compared in
   constant time; secrets live only in Cloudflare; a portfolio mode makes the deployment
   read-only and replaces the live advisor with saved answers.
@@ -136,8 +136,9 @@ Deployment, the Sheet setup and the presentation workflow are in
 ## How it was built
 
 The A Team designed the approach, ran the factory, and made every decision in the game.
-The code (dashboard, Worker, Apps Script, Python model and tests) was written by Claude
-(Anthropic) in Claude Code and Cowork sessions, directed and reviewed by the team. The
+The code (dashboard, Worker, Apps Script, full Python model and tests) was written by Claude
+(Anthropic) in Claude Code and Cowork sessions, directed and reviewed by the team. The Python model 
+was originally built by the team as an MVP from the game's rules and specifications. The
 advisor's answers during the game were written by Claude Sonnet from the dashboard's
 numbers, and disclosed to the course with the full log.
 
